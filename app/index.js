@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,6 +36,13 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [showSetup, setShowSetup] = useState(true);
+  const [kbHeight, setKbHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   useEffect(() => {
     try {
@@ -287,7 +295,7 @@ export default function ChatScreen() {
         })}
       </ScrollView>
 
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
         <TextInput
           style={styles.input}
           placeholder={status === "connected" ? "Type a message..." : "Not connected"}
