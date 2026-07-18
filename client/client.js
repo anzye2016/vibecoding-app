@@ -81,24 +81,6 @@ async function dirExists(wslDir) {
   }
 }
 
-function runCmd(cmd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("cmd", ["/c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => { stdout += d; });
-    child.stderr.on("data", (d) => { stderr += d; });
-    child.on("close", (code) => {
-      if (code === 0) resolve(stdout.trim());
-      else {
-        console.error("[client] cmd stderr:", stderr);
-        reject(new Error(`exit ${code}`));
-      }
-    });
-    child.on("error", reject);
-  });
-}
-
 function pipeToPython(script, input) {
   return new Promise((resolve, reject) => {
     const child = spawn("python", [script], { stdio: ["pipe", "pipe", "pipe"] });

@@ -114,9 +114,9 @@ export default function ChatScreen() {
             addMessage({ type: "status", text: "--- History loaded ---" });
           }
         }
-        } catch (e) {
-          console.warn("[ws] parse error:", e.message);
-        }
+      } catch (e) {
+        console.warn("[ws] parse error:", e.message);
+      }
     };
 
     ws.onclose = () => {
@@ -258,17 +258,10 @@ export default function ChatScreen() {
               </TouchableOpacity>
             );
           }
-          if (msg.type === "user") {
+          if (msg.type === "user" || msg.type === "history-user") {
             return (
               <TouchableOpacity key={i} activeOpacity={1.0}>
                 <Text style={styles.userLine}>{msg.text}</Text>
-              </TouchableOpacity>
-            );
-          }
-          if (msg.type === "history-user") {
-            return (
-              <TouchableOpacity key={i} activeOpacity={1.0}>
-                <Text style={styles.historyUserLine}>{msg.text}</Text>
               </TouchableOpacity>
             );
           }
@@ -409,13 +402,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   userLine: {
-    color: "#93c5fd",
-    fontSize: 16,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 24,
-    marginTop: 4,
-  },
-  historyUserLine: {
     color: "#93c5fd",
     fontSize: 16,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
