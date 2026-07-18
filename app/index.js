@@ -71,7 +71,9 @@ export default function ChatScreen() {
 
     ws.onopen = () => {
       setStatus("connected");
+      setMessages([]);
       addMessage({ type: "status", text: "--- Connected ---" });
+      ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
     };
 
     ws.onmessage = (e) => {
@@ -152,10 +154,13 @@ export default function ChatScreen() {
     await Clipboard.setStringAsync(text);
   };
 
+  const Wrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
+  const wrapperProps = Platform.OS === "ios" ? { behavior: "padding", keyboardVerticalOffset: 0 } : {};
+
   return (
-    <KeyboardAvoidingView
+    <Wrapper
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      {...wrapperProps}
     >
       <View style={styles.header}>
         <TouchableOpacity
@@ -294,7 +299,7 @@ export default function ChatScreen() {
           </TouchableOpacity>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 

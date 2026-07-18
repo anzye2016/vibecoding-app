@@ -1,4 +1,4 @@
-import { spawn, exec } from "child_process";
+import { spawn } from "child_process";
 import readline from "readline";
 import WebSocket from "ws";
 
@@ -10,14 +10,22 @@ let currentChild = null;
 let ws = null;
 let reconnectTimer = null;
 let lastSessionId = null;
-let historySent = false;
 
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
-    exec(`wsl -e bash -c ${JSON.stringify(cmd)}`, (err, stdout) => {
-      if (err) reject(err);
-      else resolve(stdout.trim());
+    const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else {
+        console.error("[client] wsl stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
     });
+    child.on("error", reject);
   });
 }
 
@@ -37,6 +45,7 @@ async function dirExists(wslDir) {
 async function getLastSession(dir) {
   try {
     const raw = await wsl(`cd "${dir}" && opencode session list --format json`);
+    if (!raw) return null;
     const sessions = JSON.parse(raw);
     if (Array.isArray(sessions)) {
       const named = sessions.filter(s => !s.title.startsWith("New session"));
@@ -51,28 +60,31 @@ async function getLastSession(dir) {
 
 async function loadHistory(dir, sessionId) {
   try {
-    const raw = await wsl(`cd "${dir}" && opencode export "${sessionId}"`);
-    const data = JSON.parse(raw);
-    const msgs = data.messages || [];
-    const rounds = [];
-    let lastUser = null;
-    for (const m of msgs) {
-      const role = m.info?.role;
-      const text = m.parts?.[0]?.text || "";
-      if (!text.trim()) continue;
-      if (role === "user") {
-        lastUser = text;
-      } else if (role === "assistant" && lastUser !== null) {
-        rounds.push({ user: lastUser, assistant: text });
-        lastUser = null;
-      }
-    }
-    const recent = rounds.slice(-5);
-    if (recent.length === 0) return;
-    send({ type: "history", rounds: recent });
-    console.log(`[client] Sent ${recent.length} history rounds`);
+    const script = "/mnt/c/vibecoding-app/client/last5.py";
+    const raw = await wsl(`cd "${dir}" && opencode export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+    if (!raw) return;
+    const rounds = JSON.parse(raw);
+    if (rounds.length === 0) return;
+    send({ type: "history", rounds });
+    console.log(`[client] Sent ${rounds.length} history rounds`);
   } catch (e) {
     console.error("[client] Failed to load history:", e.message);
+  }
+}
+
+async function sendHistory(msg) {
+  const dir = msg.dir || process.cwd();
+  console.log("[client] sendHistory dir:", dir);
+  if (!dir) return;
+  let actualDir = dir;
+  if (actualDir.match(/^[A-Za-z]:/)) {
+    actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
+  }
+  if (!lastSessionId) {
+    lastSessionId = await getLastSession(actualDir);
+  }
+  if (lastSessionId) {
+    await loadHistory(actualDir, lastSessionId);
   }
 }
 
@@ -97,6 +109,9 @@ function connect() {
       handleMessage(msg);
     } else if (msg.type === "cancel") {
       cancelCurrent();
+    } else if (msg.type === "load_history") {
+      console.log("[client] load_history received, dir:", msg.dir);
+      sendHistory(msg);
     }
   });
 
@@ -133,11 +148,6 @@ async function handleMessage(msg) {
     if (lastSessionId) {
       console.log(`[client] Using session: ${lastSessionId}`);
     }
-  }
-
-  if (!historySent && lastSessionId) {
-    historySent = true;
-    await loadHistory(actualDir, lastSessionId);
   }
 
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
@@ -197,18 +207,17 @@ function scheduleReconnect() {
   }, 5000);
 }
 
-process.on("SIGINT", () => {
-  cancelCurrent();
-  if (reconnectTimer) clearInterval(reconnectTimer);
-  if (ws) ws.close();
-  process.exit(0);
-});
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-process.on("SIGTERM", () => {
+const stdinRl = readline.createInterface({ input: process.stdin });
+stdinRl.on("SIGINT", shutdown);
+
+function shutdown() {
   cancelCurrent();
   if (reconnectTimer) clearInterval(reconnectTimer);
   if (ws) ws.close();
   process.exit(0);
-});
+}
 
 connect();
