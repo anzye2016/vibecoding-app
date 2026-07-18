@@ -52,7 +52,26 @@ function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
+function runOpenCode(dir, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("opencode", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], ...opts });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else {
+        console.error("[client] opencode stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
+    });
+    child.on("error", reject);
+  });
+}
+
 async function dirExists(wslDir) {
+  if (wslDir.match(/^[A-Za-z]:/)) return existsSync(wslDir);
   try {
     const out = await wsl(`test -d "${wslDir}" && echo ok`);
     return out === "ok";
@@ -61,9 +80,27 @@ async function dirExists(wslDir) {
   }
 }
 
+function runCmd(cmd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("cmd", ["/c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(`exit ${code}`));
+    });
+    child.on("error", reject);
+  });
+}
+
 async function getLastSession(dir) {
   try {
-    const raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
+    let raw;
+    if (dir.match(/^[A-Za-z]:/)) {
+      raw = await runOpenCode(dir, ["session", "list", "--format", "json"]);
+    } else {
+      raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
+    }
     if (!raw) return null;
     const sessions = JSON.parse(raw);
     if (Array.isArray(sessions)) {
@@ -79,13 +116,20 @@ async function getLastSession(dir) {
 
 async function loadHistory(dir, sessionId) {
   try {
-    const script = "/mnt/c/vibecoding-app/client/last5.py";
-    const safeDir = dir
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$')
-      .replace(/`/g, '\\`');
-    const raw = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+    let raw;
+    const isWin = dir.match(/^[A-Za-z]:/);
+    if (isWin) {
+      const script = join(__dirname, "last5.py").replace(/\\/g, "\\\\");
+      raw = await runCmd(`cd /d "${dir}" && opencode export "${sessionId}" 2>nul | python "${script}"`);
+    } else {
+      const script = "/mnt/c/vibecoding-app/client/last5.py";
+      const safeDir = dir
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\$/g, '\\$')
+        .replace(/`/g, '\\`');
+      raw = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+    }
     if (!raw) return;
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) return;
@@ -100,17 +144,16 @@ async function sendHistory(msg) {
   const dir = msg.dir || process.cwd();
   console.log("[client] sendHistory dir:", dir);
   if (!dir) return;
-  let actualDir = dir;
-  if (actualDir.match(/^[A-Za-z]:/)) {
-    actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
+  const isWin = dir.match(/^[A-Za-z]:/);
+  const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
+
+  if (!sessionCache.has(cacheKey)) {
+    const sid = await getLastSession(dir);
+    if (sid) sessionCache.set(cacheKey, sid);
   }
-  if (!sessionCache.has(actualDir)) {
-    const sid = await getLastSession(actualDir);
-    if (sid) sessionCache.set(actualDir, sid);
-  }
-  const sid = sessionCache.get(actualDir);
+  const sid = sessionCache.get(cacheKey);
   if (sid) {
-    await loadHistory(actualDir, sid);
+    await loadHistory(dir, sid);
   }
 }
 
@@ -152,38 +195,60 @@ function connect() {
   });
 }
 
-async function handleMessage(msg) {
-  const dir = msg.dir || process.cwd();
-  const message = msg.msg || "";
-
-  if (!message.trim()) return;
-
-  let actualDir = dir;
-  if (actualDir.match(/^[A-Za-z]:/)) {
-    actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
-  }
-
-  const allowedPrefixes = [
+function loadAllowedDirs() {
+  const file = process.env.ALLOWED_DIRS_FILE || join(__dirname, "allowed-dirs.txt");
+  try {
+    if (existsSync(file)) {
+      return readFileSync(file, "utf-8")
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l && !l.startsWith("#"));
+    }
+  } catch {}
+  return [
     "/mnt/c/Users/anzye/projects/",
     "/home/anzye/projects/",
     "/mnt/c/vibecoding-app/",
     "/mnt/c/Users/anzye/scripts/",
     "/mnt/c/Users/anzye/",
   ];
-  const normalized = actualDir.replace(/\/$/, "") + "/";
-  if (!allowedPrefixes.some(p => normalized.startsWith(p))) {
+}
+
+async function handleMessage(msg) {
+  const dir = msg.dir || process.cwd();
+  const message = msg.msg || "";
+
+  if (!message.trim()) return;
+
+  const isWin = dir.match(/^[A-Za-z]:/);
+  let actualDir = dir;
+  if (isWin) {
+    actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
+  }
+
+  const allowedPrefixes = loadAllowedDirs();
+  const normalized = actualDir.replace(/\\/g, "/").replace(/\/$/, "") + "/";
+  const winNormalized = isWin ? dir.replace(/\\/g, "/").replace(/\/$/, "") + "/" : "";
+  if (!allowedPrefixes.some(p => normalized.startsWith(p) || (winNormalized && winNormalized.startsWith(p)))) {
     send({ type: "error", text: "Directory not in allowed project paths" });
     return;
   }
 
-  const exists = await dirExists(actualDir);
-  if (!exists) {
-    send({ type: "error", text: `Directory not found: ${actualDir}` });
-    return;
+  if (isWin) {
+    if (!existsSync(dir)) {
+      send({ type: "error", text: `Directory not found: ${dir}` });
+      return;
+    }
+  } else {
+    const exists = await dirExists(actualDir);
+    if (!exists) {
+      send({ type: "error", text: `Directory not found: ${actualDir}` });
+      return;
+    }
   }
 
   if (!sessionCache.has(actualDir)) {
-    const sid = await getLastSession(actualDir);
+    const sid = await getLastSession(dir);
     if (sid) {
       sessionCache.set(actualDir, sid);
       console.log(`[client] Using session: ${sid}`);
@@ -192,23 +257,30 @@ async function handleMessage(msg) {
   const lastSessionId = sessionCache.get(actualDir) || null;
 
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
-
-  console.log(`[client] Running ${getOpenCode(actualDir)} in ${actualDir}: ${message}`);
-
   const escapedMsg = message
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\$/g, '\\$')
     .replace(/`/g, '\\`')
     .replace(/!/g, '\\!');
-  const escapedDir = actualDir
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, '\\$')
-    .replace(/`/g, '\\`');
-  const cmd = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
 
-  const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+  let child;
+  if (isWin) {
+    const args = ["run"];
+    if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
+    args.push(message);
+    child = spawn("opencode", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
+    console.log(`[client] Running opencode natively in ${dir}: ${message}`);
+  } else {
+    const escapedDir = actualDir
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+    const cmd = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
+    child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    console.log(`[client] Running ${getOpenCode(actualDir)} in ${actualDir}: ${message}`);
+  }
 
   currentChild = child;
 

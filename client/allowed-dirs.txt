@@ -1,0 +1,12 @@
+# Allowed directories (one per line, # for comments)
+# Supports both Windows format (C:/Users/anzye/...) and WSL format (/mnt/c/Users/anzye/...)
+# Subdirectories are automatically included. Hot reload, no restart needed.
+
+C:/Users/anzye/projects/
+C:/Users/anzye/scripts/
+C:/vibecoding-app/
+/home/anzye/projects/
+/home/anzye/models/
+/home/anzye/scripts/
+/home/anzye/github/
+/home/anzye/duckdb/
