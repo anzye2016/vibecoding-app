@@ -293,21 +293,14 @@ async function handleMessage(msg) {
 
   currentChild = child;
 
-  const rlOut = readline.createInterface({ input: child.stdout });
-  const rlErr = readline.createInterface({ input: child.stderr });
-
-  rlOut.on("line", (line) => {
-    send({ type: "chunk", text: stripAnsi(line) + "\n" });
-  });
-
-  rlErr.on("line", (line) => {
-    send({ type: "chunk", text: stripAnsi(line) + "\n" });
-  });
+  function onData(chunk) {
+    send({ type: "chunk", text: stripAnsi(chunk.toString()) });
+  }
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
 
   child.on("close", (code) => {
     currentChild = null;
-    rlOut.close();
-    rlErr.close();
     send({ type: "done", code: code || 0 });
   });
 

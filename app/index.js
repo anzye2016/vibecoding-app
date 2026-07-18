@@ -37,12 +37,26 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState("");
   const [showSetup, setShowSetup] = useState(true);
   const [kbHeight, setKbHeight] = useState(0);
+  const [spinner, setSpinner] = useState(0);
+
+  const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", (e) => setKbHeight(e.endCoordinates.height));
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKbHeight(0));
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKbHeight(e.endCoordinates.height);
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKbHeight(0);
+    });
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  useEffect(() => {
+    if (!processing) return;
+    const t = setInterval(() => setSpinner(s => (s + 1) % SPINNER_FRAMES.length), 100);
+    return () => clearInterval(t);
+  }, [processing]);
 
   useEffect(() => {
     try {
@@ -189,7 +203,7 @@ export default function ChatScreen() {
         >
           <View style={[styles.statusDot, { backgroundColor: status === "connected" ? "#4ade80" : status === "connecting" ? "#facc15" : "#ef4444" }]} />
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {status === "connected" ? roomId : "Disconnected"}
+            {status === "connected" ? (processing ? `${SPINNER_FRAMES[spinner]} ${roomId}` : roomId) : "Disconnected"}
           </Text>
         </TouchableOpacity>
       </View>
