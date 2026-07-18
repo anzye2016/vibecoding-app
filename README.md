@@ -1,15 +1,9 @@
 # VibeCoding
 
-在手机上继续电脑 opencode 的对话。手机发消息 → 首尔服务器中转 → 电脑 opencode 执行 → 结果回传手机。
-
-## 架构
+在手机上继续电脑 opencode 的对话。
 
 ```
-手机 App (Expo/React Native)
-    ↕ HTTPS/WebSocket
-首尔服务器 wxysyn.com (Node.js Relay)
-    ↕ WebSocket
-Windows PC (Node.js Client → opencode CLI)
+手机 App ←→ 首尔 wxysyn.com 中继 ←→ PC 客户端 → opencode 子进程
 ```
 
 ## 目录结构
@@ -17,19 +11,19 @@ Windows PC (Node.js Client → opencode CLI)
 ```
 C:\vibecoding-app\
 ├── app/              # Expo Android 应用
-│   ├── _layout.js    # 根布局
-│   ├── index.js      # 主屏幕（聊天UI）
-│   └── ...
-├── client/           # PC 客户端
-│   ├── client.js     # WebSocket 连接 + opencode 子进程
+│   ├── _layout.js
+│   └── index.js      # 聊天 UI
+├── client/           # Windows PC 客户端
+│   ├── client.js     # WebSocket + 管理 opencode 子进程
+│   ├── last5.py      # 导出最后 5 轮对话的 Python 脚本
 │   └── package.json
 ├── relay/            # 首尔中继服务器
 │   ├── server.js     # WebSocket 房间配对转发
 │   └── package.json
-├── assets/           # 图标资源
+├── assets/           # 图标
 ├── gen-icon.js       # 图标生成脚本
 ├── app.json          # Expo 配置
-└── package.json      # Expo 依赖
+└── package.json
 ```
 
 ## PC 客户端
@@ -38,49 +32,64 @@ C:\vibecoding-app\
 cd C:\vibecoding-app\client
 npm install
 node client.js
-
-# 环境变量（可选）
-# RELAY_URL  - 中继地址，默认 wss://wxysyn.com/vibecoding/ws
-# ROOM       - 房间ID，默认 default
-# RELAY_TOKEN - 认证令牌，默认 vibecoding-default-token
 ```
 
-## 中继服务器部署
+环境变量：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `ROOM` | `default` | 房间名，自由取名，手机端输入相同的即可 |
+| `RELAY_URL` | `wss://wxysyn.com/vibecoding/ws` | 中继地址 |
+| `RELAY_TOKEN` | `vibecoding-default-token` | 认证令牌 |
+
+指定房间：
+
+```powershell
+$env:ROOM = "myroom"; node client.js
+```
+
+## 路径选择
+
+客户端通过 WSL 运行 opencode，根据路径前缀自动选择二进制：
+
+| 路径格式 | 示例 | 使用 opencode |
+|----------|------|---------------|
+| `/mnt/c/...` | `/mnt/c/Users/anzye/projects/esp32` | Windows opencode (1.18.1) |
+| `C:\...` | `C:\Users\anzye\projects\esp32` | Windows opencode（自动转换） |
+| `/home/...` | `/home/anzye/projects/foo` | WSL opencode (1.18.3) |
+
+## 功能
+
+- 发送消息到 PC opencode，`-s` 指定会话 ID 继续上次对话
+- 连接时自动加载最后 5 轮对话历史
+- 支持 opencode 斜杠命令（`/model`、`/compact`、`/model switch xxx`）
+- Stop 按钮终止正在执行的命令
+- 目录不存在时提示错误
+- PC 断线自动重连
+
+## 中继服务器
 
 首尔服务器，systemd 管理：
 
 ```bash
-# 上传文件
 scp relay/* ubuntu@43.155.246.153:/opt/vibecoding-relay/
-# 安装依赖
 ssh ubuntu@43.155.246.153 "cd /opt/vibecoding-relay && npm install"
-# 启用服务
 ssh ubuntu@43.155.246.153 "sudo systemctl enable --now vibecoding-relay"
 ```
 
-nginx 反向代理配置见 `relay/fix-nginx.py`。
+nginx 配置见 `relay/fix-nginx.py`。
 
 ## 编译 APK
 
 ```powershell
 set JAVA_HOME=C:\tools\jdk-17.0.19+10
 
-# 首次或改了 app.json / 新增原生依赖时
+# 首次或改过 app.json / 新增原生依赖
 npx expo prebuild --platform android --clean
 
-# 日常改代码后
+# 日常改 JS 代码
 cd android
 .\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
 ```
 
-APK 输出：`android/app/build/outputs/apk/release/app-release.apk`
-
-## 使用
-
-1. 电脑启动客户端：`cd client && node client.js`
-2. 手机安装 APK，打开 App
-3. 输入 Room ID（与 PC 一致）
-4. 输入工作目录（如 `/mnt/c/Users/anzye/projects/my-app`）
-5. 点击 Connect，开始对话
-
-支持斜杠命令：`/model`、`/model switch xxx`、`/compact` 等。
+APK: `android/app/build/outputs/apk/release/app-release.apk`
