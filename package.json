@@ -1,0 +1,24 @@
+{
+  "name": "vibecoding",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "babel-preset-expo": "^56.0.13",
+    "expo": "~56.0.5",
+    "expo-clipboard": "~56.0.4",
+    "expo-linking": "^57.0.3",
+    "expo-router": "^56.2.7",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2"
+  },
+  "private": true
+}

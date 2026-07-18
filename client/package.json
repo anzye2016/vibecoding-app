@@ -1,0 +1,11 @@
+{
+  "name": "vibecoding-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
