@@ -29,6 +29,10 @@ function wsl(cmd) {
   });
 }
 
+function getOpenCode(wslDir) {
+  return wslDir.startsWith("/mnt/") ? "opencode" : "/home/anzye/.npm-global/bin/opencode";
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
@@ -44,7 +48,7 @@ async function dirExists(wslDir) {
 
 async function getLastSession(dir) {
   try {
-    const raw = await wsl(`cd "${dir}" && opencode session list --format json`);
+    const raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
     if (!raw) return null;
     const sessions = JSON.parse(raw);
     if (Array.isArray(sessions)) {
@@ -61,7 +65,7 @@ async function getLastSession(dir) {
 async function loadHistory(dir, sessionId) {
   try {
     const script = "/mnt/c/vibecoding-app/client/last5.py";
-    const raw = await wsl(`cd "${dir}" && opencode export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+    const raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
     if (!raw) return;
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) return;
@@ -152,10 +156,10 @@ async function handleMessage(msg) {
 
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
 
-  console.log(`[client] Running opencode in ${actualDir}: ${message}`);
+  console.log(`[client] Running ${getOpenCode(actualDir)} in ${actualDir}: ${message}`);
 
   const escapedMsg = message.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const cmd = `cd "${actualDir}" && opencode run ${sessionArg} "${escapedMsg}"`;
+  const cmd = `cd "${actualDir}" && ${getOpenCode(actualDir)} run ${sessionArg} "${escapedMsg}"`;
 
   const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
 
