@@ -10,6 +10,7 @@ const ROOM = process.env.ROOM || "default";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
+const OPENDCODE_BIN = process.env.OPENDCODE_BIN || join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
 let TOKEN = process.env.RELAY_TOKEN;
 
 if (!TOKEN && existsSync(tokenFile)) {
@@ -54,7 +55,7 @@ function stripAnsi(str) {
 
 function runOpenCode(dir, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn("opencode", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], ...opts });
+    const child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], ...opts });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
@@ -84,12 +85,37 @@ function runCmd(cmd) {
   return new Promise((resolve, reject) => {
     const child = spawn("cmd", ["/c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
+    let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
       if (code === 0) resolve(stdout.trim());
-      else reject(new Error(`exit ${code}`));
+      else {
+        console.error("[client] cmd stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
     });
     child.on("error", reject);
+  });
+}
+
+function pipeToPython(script, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python", [script], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else {
+        console.error("[client] python stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
+    });
+    child.on("error", reject);
+    child.stdin.write(input);
+    child.stdin.end();
   });
 }
 
@@ -119,8 +145,9 @@ async function loadHistory(dir, sessionId) {
     let raw;
     const isWin = dir.match(/^[A-Za-z]:/);
     if (isWin) {
-      const script = join(__dirname, "last5.py").replace(/\\/g, "\\\\");
-      raw = await runCmd(`cd /d "${dir}" && opencode export "${sessionId}" 2>nul | python "${script}"`);
+      const exportOut = await runOpenCode(dir, ["export", sessionId]);
+      if (!exportOut) return;
+      raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
     } else {
       const script = "/mnt/c/vibecoding-app/client/last5.py";
       const safeDir = dir
@@ -269,7 +296,7 @@ async function handleMessage(msg) {
     const args = ["run"];
     if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
     args.push(message);
-    child = spawn("opencode", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
+    child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running opencode natively in ${dir}: ${message}`);
   } else {
     const escapedDir = actualDir
