@@ -8,16 +8,16 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
+import MarkdownBlock from "./components/MarkdownBlock";
 
 const RELAY_URL = "wss://wxysyn.com/vibecoding/ws";
-const TOKEN = "vibecoding-default-token";
 
 const STORAGE_KEYS = {
+  TOKEN: "vibecoding_token",
   ROOM: "vibecoding_room",
   DIR: "vibecoding_dir",
 };
@@ -27,6 +27,7 @@ export default function ChatScreen() {
   const scrollRef = useRef(null);
   const wsRef = useRef(null);
 
+  const [token, setToken] = useState("");
   const [roomId, setRoomId] = useState("");
   const [workDir, setWorkDir] = useState("");
   const [status, setStatus] = useState("disconnected");
@@ -36,9 +37,16 @@ export default function ChatScreen() {
   const [showSetup, setShowSetup] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.ROOM).then((v) => { if (v) setRoomId(v); });
-    AsyncStorage.getItem(STORAGE_KEYS.DIR).then((v) => { if (v) setWorkDir(v); });
+    try {
+      AsyncStorage.getItem(STORAGE_KEYS.TOKEN).then((v) => { if (v) setToken(v); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.ROOM).then((v) => { if (v) setRoomId(v); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.DIR).then((v) => { if (v) setWorkDir(v); }).catch(() => {});
+    } catch (_) {}
   }, []);
+
+  useEffect(() => {
+    if (token) AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token);
+  }, [token]);
 
   useEffect(() => {
     if (roomId) AsyncStorage.setItem(STORAGE_KEYS.ROOM, roomId);
@@ -59,13 +67,13 @@ export default function ChatScreen() {
   }, []);
 
   const connect = () => {
-    if (!roomId.trim()) return;
+    if (!roomId.trim() || !token.trim()) return;
 
     disconnect();
     setStatus("connecting");
     setShowSetup(false);
 
-    const url = `${RELAY_URL}?room=${encodeURIComponent(roomId.trim())}&role=phone&token=${encodeURIComponent(TOKEN)}`;
+    const url = `${RELAY_URL}?room=${encodeURIComponent(roomId.trim())}&role=phone&token=${encodeURIComponent(token.trim())}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -98,14 +106,17 @@ export default function ChatScreen() {
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "history") {
           if (msg.rounds && Array.isArray(msg.rounds)) {
-            msg.rounds.forEach((r) => {
+            msg.rounds.forEach((r, idx) => {
+              if (idx > 0) addMessage({ type: "spacer" });
               addMessage({ type: "history-user", text: r.user });
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
           }
         }
-      } catch {}
+        } catch (e) {
+          console.warn("[ws] parse error:", e.message);
+        }
     };
 
     ws.onclose = () => {
@@ -179,6 +190,16 @@ export default function ChatScreen() {
         <View style={styles.setupBar}>
           <TextInput
             style={styles.setupInput}
+            placeholder="Token"
+            placeholderTextColor="#525252"
+            value={token}
+            onChangeText={setToken}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <TextInput
+            style={styles.setupInput}
             placeholder="Room ID"
             placeholderTextColor="#525252"
             value={roomId}
@@ -220,7 +241,7 @@ export default function ChatScreen() {
         showsVerticalScrollIndicator={false}
       >
         {messages.length === 0 && (
-          <Text style={styles.emptyHint}>Set room ID and tap Connect</Text>
+          <Text style={styles.emptyHint}>Set Token, Room ID and tap Connect</Text>
         )}
         {messages.map((msg, i) => {
           if (msg.type === "status") {
@@ -251,12 +272,15 @@ export default function ChatScreen() {
               </TouchableOpacity>
             );
           }
-          if (msg.type === "history-assistant") {
+          if (msg.type === "chunk" || msg.type === "history-assistant") {
             return (
-              <TouchableOpacity key={i} activeOpacity={1.0}>
-                <Text style={styles.historyAssistantLine}>{msg.text}</Text>
+              <TouchableOpacity key={i} activeOpacity={1.0} onLongPress={() => copyOutput(msg.text)}>
+                <MarkdownBlock text={msg.text} />
               </TouchableOpacity>
             );
+          }
+          if (msg.type === "spacer") {
+            return <View key={i} style={{ height: 16 }} />;
           }
           return (
             <TouchableOpacity
@@ -264,7 +288,7 @@ export default function ChatScreen() {
               activeOpacity={0.7}
               onLongPress={() => copyOutput(msg.text)}
             >
-              <Text style={styles.outputLine}>{msg.text}</Text>
+              <MarkdownBlock text={msg.text} />
             </TouchableOpacity>
           );
         })}
@@ -374,42 +398,31 @@ const styles = StyleSheet.create({
   },
   statusLine: {
     color: "#737373",
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 18,
+    lineHeight: 20,
   },
   errorLine: {
     color: "#ef4444",
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 18,
+    lineHeight: 20,
   },
   userLine: {
     color: "#93c5fd",
-    fontSize: 12,
+    fontSize: 16,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 18,
+    lineHeight: 24,
     marginTop: 4,
   },
   historyUserLine: {
-    color: "#4a6a8a",
-    fontSize: 10,
+    color: "#93c5fd",
+    fontSize: 16,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 16,
-    marginTop: 2,
+    lineHeight: 24,
+    marginTop: 4,
   },
-  historyAssistantLine: {
-    color: "#3a3a3a",
-    fontSize: 10,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 16,
-  },
-  outputLine: {
-    color: "#d4d4d4",
-    fontSize: 12,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 18,
-  },
+
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",

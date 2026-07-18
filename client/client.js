@@ -1,15 +1,30 @@
 import { spawn } from "child_process";
+import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import readline from "readline";
 import WebSocket from "ws";
 
 const RELAY_URL = process.env.RELAY_URL || "wss://wxysyn.com/vibecoding/ws";
 const ROOM = process.env.ROOM || "default";
-const TOKEN = process.env.RELAY_TOKEN || "vibecoding-default-token";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
+let TOKEN = process.env.RELAY_TOKEN;
+
+if (!TOKEN && existsSync(tokenFile)) {
+  TOKEN = readFileSync(tokenFile, "utf-8").trim();
+}
+
+if (!TOKEN) {
+  console.error("RELAY_TOKEN env var or .vibecoding-token file is required");
+  process.exit(1);
+}
 
 let currentChild = null;
 let ws = null;
 let reconnectTimer = null;
-let lastSessionId = null;
+const sessionCache = new Map();
 
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
@@ -65,7 +80,12 @@ async function getLastSession(dir) {
 async function loadHistory(dir, sessionId) {
   try {
     const script = "/mnt/c/vibecoding-app/client/last5.py";
-    const raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+    const safeDir = dir
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+    const raw = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
     if (!raw) return;
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) return;
@@ -84,11 +104,13 @@ async function sendHistory(msg) {
   if (actualDir.match(/^[A-Za-z]:/)) {
     actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
   }
-  if (!lastSessionId) {
-    lastSessionId = await getLastSession(actualDir);
+  if (!sessionCache.has(actualDir)) {
+    const sid = await getLastSession(actualDir);
+    if (sid) sessionCache.set(actualDir, sid);
   }
-  if (lastSessionId) {
-    await loadHistory(actualDir, lastSessionId);
+  const sid = sessionCache.get(actualDir);
+  if (sid) {
+    await loadHistory(actualDir, sid);
   }
 }
 
@@ -141,25 +163,50 @@ async function handleMessage(msg) {
     actualDir = "/mnt/" + actualDir[0].toLowerCase() + actualDir.slice(2).replace(/\\/g, "/");
   }
 
+  const allowedPrefixes = [
+    "/mnt/c/Users/anzye/projects/",
+    "/home/anzye/projects/",
+    "/mnt/c/vibecoding-app/",
+    "/mnt/c/Users/anzye/scripts/",
+    "/mnt/c/Users/anzye/",
+  ];
+  const normalized = actualDir.replace(/\/$/, "") + "/";
+  if (!allowedPrefixes.some(p => normalized.startsWith(p))) {
+    send({ type: "error", text: "Directory not in allowed project paths" });
+    return;
+  }
+
   const exists = await dirExists(actualDir);
   if (!exists) {
     send({ type: "error", text: `Directory not found: ${actualDir}` });
     return;
   }
 
-  if (!lastSessionId) {
-    lastSessionId = await getLastSession(actualDir);
-    if (lastSessionId) {
-      console.log(`[client] Using session: ${lastSessionId}`);
+  if (!sessionCache.has(actualDir)) {
+    const sid = await getLastSession(actualDir);
+    if (sid) {
+      sessionCache.set(actualDir, sid);
+      console.log(`[client] Using session: ${sid}`);
     }
   }
+  const lastSessionId = sessionCache.get(actualDir) || null;
 
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
 
   console.log(`[client] Running ${getOpenCode(actualDir)} in ${actualDir}: ${message}`);
 
-  const escapedMsg = message.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const cmd = `cd "${actualDir}" && ${getOpenCode(actualDir)} run ${sessionArg} "${escapedMsg}"`;
+  const escapedMsg = message
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
+    .replace(/!/g, '\\!');
+  const escapedDir = actualDir
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`');
+  const cmd = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
 
   const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
 
