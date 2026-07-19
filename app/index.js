@@ -312,8 +312,8 @@ export default function ChatScreen() {
         })}
         {processing && (
           <View style={styles.thinkingBar}>
-            <Text style={styles.thinkingDot}>{SPINNER_FRAMES[spinner]}</Text>
             <Text style={styles.thinkingText}>Thinking...</Text>
+            <Text style={styles.thinkingDot}>{SPINNER_FRAMES[spinner]}</Text>
           </View>
         )}
       </ScrollView>

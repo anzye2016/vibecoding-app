@@ -275,7 +275,7 @@ async function handleMessage(msg) {
 
   let child;
   if (isWin) {
-    const args = ["run", "--format", "json"];
+    const args = ["run"];
     if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
     args.push(message);
     child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
@@ -286,7 +286,7 @@ async function handleMessage(msg) {
       .replace(/"/g, '\\"')
       .replace(/\$/g, '\\$')
       .replace(/`/g, '\\`');
-    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run --format json ${sessionArg} "${escapedMsg}"`;
+    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
     const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
     child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
@@ -297,24 +297,33 @@ async function handleMessage(msg) {
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
+  let buf = [];
+  let isCmdSection;
+  let cmdLineCount;
+  const MAX_CMD_LINES = 20;
+
+  function flushBuf() {
+    if (buf.length === 0) return;
+    const first = buf.find(l => l.trim() !== "") || "";
+    isCmdSection = /^\[bash\b/.test(first.trim());
+    cmdLineCount = 0;
+    for (const line of buf) {
+      if (isCmdSection && line.trim() && ++cmdLineCount > MAX_CMD_LINES) {
+        if (cmdLineCount === MAX_CMD_LINES + 1) send({ type: "chunk", text: "\n[Output truncated...]\n" });
+        continue;
+      }
+      send({ type: "chunk", text: line + "\n" });
+    }
+    buf = [];
+  }
+
   function onLine(line) {
     const text = stripAnsi(line);
-    try {
-      const msg = JSON.parse(text);
-      const t = msg.type;
-
-      if (t === "text" || t === "reasoning") {
-        send({ type: "chunk", text: (msg.text || "") + "\n" });
-      } else if (t === "tool") {
-        const name = msg.tool || "";
-        const inp = (msg.state && msg.state.input) || {};
-        const cmd = inp.command || (typeof inp === "string" ? inp : JSON.stringify(inp));
-        send({ type: "chunk", text: `[${name}] ${cmd}\n` });
-      } else if (t === "tool_result") {
-        return;
-      }
-    } catch {
-      send({ type: "chunk", text: text + "\n" });
+    if (text.trim() === "") {
+      buf.push(text);
+      flushBuf();
+    } else {
+      buf.push(text);
     }
   }
 
@@ -323,6 +332,7 @@ async function handleMessage(msg) {
 
   child.on("close", (code) => {
     currentChild = null;
+    flushBuf();
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
