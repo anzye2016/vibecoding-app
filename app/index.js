@@ -113,6 +113,7 @@ export default function ChatScreen() {
             addMessage({ type: "status", text: "--- PC online ---" });
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
+            setProcessing(false);
           }
         } else if (msg.type === "chunk") {
           addMessage(msg);
