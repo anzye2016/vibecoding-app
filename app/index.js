@@ -329,6 +329,7 @@ export default function ChatScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           editable={status === "connected" && !processing}
+          onTouchStart={() => scrollRef.current?.scrollToEnd({ animated: true })}
           onSubmitEditing={sendMessage}
           blurOnSubmit={false}
         />
