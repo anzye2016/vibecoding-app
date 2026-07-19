@@ -275,7 +275,7 @@ async function handleMessage(msg) {
 
   let child;
   if (isWin) {
-    const args = ["run"];
+    const args = ["run", "--format", "json"];
     if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
     args.push(message);
     child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
@@ -286,7 +286,7 @@ async function handleMessage(msg) {
       .replace(/"/g, '\\"')
       .replace(/\$/g, '\\$')
       .replace(/`/g, '\\`');
-    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
+    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run --format json ${sessionArg} "${escapedMsg}"`;
     const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
     child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
@@ -294,14 +294,37 @@ async function handleMessage(msg) {
 
   currentChild = child;
 
-  function onData(chunk) {
-    send({ type: "chunk", text: stripAnsi(chunk.toString()) });
+  const rlOut = readline.createInterface({ input: child.stdout });
+  const rlErr = readline.createInterface({ input: child.stderr });
+
+  function onLine(line) {
+    const text = stripAnsi(line);
+    try {
+      const msg = JSON.parse(text);
+      const t = msg.type;
+
+      if (t === "text" || t === "reasoning") {
+        send({ type: "chunk", text: (msg.text || "") + "\n" });
+      } else if (t === "tool") {
+        const name = msg.tool || "";
+        const inp = (msg.state && msg.state.input) || {};
+        const cmd = inp.command || (typeof inp === "string" ? inp : JSON.stringify(inp));
+        send({ type: "chunk", text: `[${name}] ${cmd}\n` });
+      } else if (t === "tool_result") {
+        return;
+      }
+    } catch {
+      send({ type: "chunk", text: text + "\n" });
+    }
   }
-  child.stdout.on("data", onData);
-  child.stderr.on("data", onData);
+
+  rlOut.on("line", onLine);
+  rlErr.on("line", onLine);
 
   child.on("close", (code) => {
     currentChild = null;
+    rlOut.close();
+    rlErr.close();
     send({ type: "done", code: code || 0 });
   });
 
