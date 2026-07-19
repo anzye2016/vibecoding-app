@@ -32,7 +32,7 @@ export default function MarkdownBlock({ text }) {
     }
 
     elements.push(
-      <Text key={elements.length} style={styles.line}>{line}</Text>
+      <Text key={elements.length} style={styles.line} selectable>{line}</Text>
     );
   }
 

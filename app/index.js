@@ -292,22 +292,18 @@ export default function ChatScreen() {
           }
           if (msg.type === "chunk" || msg.type === "history-assistant") {
             return (
-              <TouchableOpacity key={i} activeOpacity={1.0} onLongPress={() => copyOutput(msg.text)}>
+              <View key={i}>
                 <MarkdownBlock text={msg.text} />
-              </TouchableOpacity>
+              </View>
             );
           }
           if (msg.type === "spacer") {
             return <View key={i} style={{ height: 16 }} />;
           }
           return (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.7}
-              onLongPress={() => copyOutput(msg.text)}
-            >
+            <View key={i}>
               <MarkdownBlock text={msg.text} />
-            </TouchableOpacity>
+            </View>
           );
         })}
         {processing && (
@@ -463,7 +459,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#262626",
     borderRadius: 12,
-    maxHeight: 100,
   },
   inputInner: {
     flex: 1,
