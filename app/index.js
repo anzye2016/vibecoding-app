@@ -203,7 +203,7 @@ export default function ChatScreen() {
         >
           <View style={[styles.statusDot, { backgroundColor: status === "connected" ? "#4ade80" : status === "connecting" ? "#facc15" : "#ef4444" }]} />
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {status === "connected" ? (processing ? `${SPINNER_FRAMES[spinner]} ${roomId}` : roomId) : "Disconnected"}
+            {status === "connected" ? roomId : "Disconnected"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -307,6 +307,12 @@ export default function ChatScreen() {
             </TouchableOpacity>
           );
         })}
+        {processing && (
+          <View style={styles.thinkingBar}>
+            <Text style={styles.thinkingDot}>{["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"][spinner]}</Text>
+            <Text style={styles.thinkingText}>Thinking...</Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
@@ -474,5 +480,21 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  thinkingBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    gap: 8,
+  },
+  thinkingDot: {
+    color: "#737373",
+    fontSize: 16,
+    fontFamily: "monospace",
+  },
+  thinkingText: {
+    color: "#525252",
+    fontSize: 14,
+    fontStyle: "italic",
   },
 });

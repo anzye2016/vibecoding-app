@@ -286,9 +286,10 @@ async function handleMessage(msg) {
       .replace(/"/g, '\\"')
       .replace(/\$/g, '\\$')
       .replace(/`/g, '\\`');
-    const cmd = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
+    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
+    const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
     child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-    console.log(`[client] Running ${getOpenCode(actualDir)} in ${actualDir}: ${message}`);
+    console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
   }
 
   currentChild = child;
