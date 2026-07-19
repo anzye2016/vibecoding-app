@@ -39,8 +39,6 @@ export default function ChatScreen() {
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
 
-  const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", (e) => {
       setKbHeight(e.endCoordinates.height);
@@ -54,9 +52,9 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!processing) return;
-    const t = setInterval(() => setSpinner(s => (s + 1) % SPINNER_FRAMES.length), 100);
-    return () => clearInterval(t);
-  }, [processing]);
+      const t = setInterval(() => setSpinner(s => (s + 1) % 3), 400);
+      return () => clearInterval(t);
+    }, [processing]);
 
   useEffect(() => {
     try {
@@ -143,12 +141,14 @@ export default function ChatScreen() {
 
     ws.onclose = () => {
       setStatus("disconnected");
+      setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
     };
 
     ws.onerror = () => {
       setStatus("disconnected");
+      setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
     };
@@ -159,6 +159,7 @@ export default function ChatScreen() {
       wsRef.current.close();
       wsRef.current = null;
     }
+    setProcessing(false);
   };
 
   const sendMessage = () => {
@@ -309,8 +310,10 @@ export default function ChatScreen() {
         })}
         {processing && (
           <View style={styles.thinkingBar}>
-            <Text style={styles.thinkingDot}>{["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"][spinner]}</Text>
-            <Text style={styles.thinkingText}>Thinking...</Text>
+            <Text style={styles.thinkingText}>Thinking</Text>
+            <Text style={[styles.thinkingDot, { opacity: spinner === 0 ? 1 : 0.3 }]}>●</Text>
+            <Text style={[styles.thinkingDot, { opacity: spinner === 1 ? 1 : 0.3 }]}>●</Text>
+            <Text style={[styles.thinkingDot, { opacity: spinner === 2 ? 1 : 0.3 }]}>●</Text>
           </View>
         )}
       </ScrollView>
@@ -485,12 +488,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 6,
-    gap: 8,
+    gap: 4,
   },
   thinkingDot: {
-    color: "#737373",
-    fontSize: 16,
-    fontFamily: "monospace",
+    color: "#a3a3a3",
+    fontSize: 8,
   },
   thinkingText: {
     color: "#525252",
