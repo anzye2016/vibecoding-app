@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
@@ -10,6 +10,7 @@ const ROOM = process.env.ROOM || "default";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
+const OPENDCODE_MODE = process.env.OPENDCODE_MODE || "json";
 const OPENDCODE_BIN = process.env.OPENDCODE_BIN || join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
 let TOKEN = process.env.RELAY_TOKEN;
 
@@ -21,6 +22,8 @@ if (!TOKEN) {
   console.error("RELAY_TOKEN env var or .vibecoding-token file is required");
   process.exit(1);
 }
+
+writeFileSync(join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt"), String(process.pid));
 
 let currentChild = null;
 let ws = null;
@@ -273,9 +276,11 @@ async function handleMessage(msg) {
     .replace(/`/g, '\\`')
     .replace(/!/g, '\\!');
 
+  const useJson = OPENDCODE_MODE === "json";
+  const fmtFlag = useJson ? ["--format", "json"] : [];
   let child;
   if (isWin) {
-    const args = ["run"];
+    const args = ["run", ...fmtFlag];
     if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
     args.push(message);
     child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
@@ -286,40 +291,39 @@ async function handleMessage(msg) {
       .replace(/"/g, '\\"')
       .replace(/\$/g, '\\$')
       .replace(/`/g, '\\`');
-    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run ${sessionArg} "${escapedMsg}"`;
+    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run${useJson ? " --format json" : ""} ${sessionArg} "${escapedMsg}"`;
     const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
     child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
   }
 
   currentChild = child;
-
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
-  let burstCount = 0;
-  let lastTime = Date.now();
-  const MAX_BURST = 40;
-
-  function onLine(line) {
-    const text = stripAnsi(line);
-    const now = Date.now();
-    if (text.length < 30 || now - lastTime > 2000) {
-      burstCount = 0;
-    }
-    lastTime = now;
-    if (text.length >= 30) {
+  if (useJson) {
+    rlOut.on("line", onJsonLine);
+    rlErr.on("line", onJsonLine);
+  } else {
+    let burstCount = 0;
+    let burstStart = 0;
+    const MAX_BURST = 40;
+    const onTextLine = (line) => {
+      const text = stripAnsi(line);
+      const now = Date.now();
+      if (now - burstStart > 2000) { burstCount = 0; burstStart = now; }
       burstCount++;
-    }
-    if (burstCount > MAX_BURST) {
-      if (burstCount === MAX_BURST + 1) send({ type: "chunk", text: "\n[Output truncated...]\n" });
-      return;
-    }
-    send({ type: "chunk", text: text + "\n" });
+      if (burstCount > MAX_BURST) return;
+      if (burstCount === MAX_BURST) {
+        send({ type: "chunk", text: text + "\n" });
+        send({ type: "chunk", text: "[Output truncated...]\n" });
+        return;
+      }
+      send({ type: "chunk", text: text + "\n" });
+    };
+    rlOut.on("line", onTextLine);
+    rlErr.on("line", onTextLine);
   }
-
-  rlOut.on("line", onLine);
-  rlErr.on("line", onLine);
 
   child.on("close", (code) => {
     currentChild = null;
@@ -332,6 +336,37 @@ async function handleMessage(msg) {
     currentChild = null;
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
   });
+}
+
+function onJsonLine(line) {
+  const raw = stripAnsi(line);
+  try {
+    const msg = JSON.parse(raw);
+    const t = msg.type;
+    const p = msg.part || {};
+
+    if (t === "text") {
+      send({ type: "chunk", text: (p.text || "") + "\n" });
+    } else if (t === "reasoning") {
+      send({ type: "chunk", text: (p.text || "") + "\n" });
+    } else if (t === "tool_use") {
+      const name = p.tool || "";
+      const state = p.state || {};
+      let cmd = state.title || "";
+      if (!cmd) {
+        const inp = state.input || {};
+        if (typeof inp === "string") cmd = inp;
+        else cmd = inp.command || inp.description || "";
+      }
+      if (cmd) cmd = cmd.slice(0, 300);
+      send({ type: "chunk", text: `[${name}] ${cmd}\n` });
+    } else if (t === "error") {
+      const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
+      send({ type: "chunk", text: `[error] ${err}\n` });
+    }
+  } catch {
+    send({ type: "chunk", text: raw + "\n" });
+  }
 }
 
 function cancelCurrent() {

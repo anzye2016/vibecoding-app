@@ -16,8 +16,10 @@ def extract(m):
             inp = state.get("input", {})
             if isinstance(inp, dict) and "command" in inp:
                 lines.append(f"[{name}] {inp['command']}")
+            elif isinstance(inp, dict) and "filePath" in inp:
+                lines.append(f"[{name}] {inp['filePath']}")
             else:
-                lines.append(f"[{name}] {json.dumps(inp)}")
+                lines.append(f"[{name}] {json.dumps(inp)[:200]}")
     return "\n\n".join(lines).strip()
 
 rounds = []
