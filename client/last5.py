@@ -40,4 +40,4 @@ for m in msgs:
 if u_text is not None and a_parts:
     rounds.append({"user": u_text, "assistant": "\n\n".join(a_parts)})
 
-print(json.dumps(rounds[-5:]))
+print(json.dumps(rounds[-10:]))

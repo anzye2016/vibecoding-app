@@ -39,6 +39,8 @@ export default function ChatScreen() {
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
 
+  const SPINNER_FRAMES = ["|", "/", "-", "\\"];
+
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", (e) => {
       setKbHeight(e.endCoordinates.height);
@@ -52,7 +54,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!processing) return;
-      const t = setInterval(() => setSpinner(s => (s + 1) % 3), 400);
+      const t = setInterval(() => setSpinner(s => (s + 1) % SPINNER_FRAMES.length), 100);
       return () => clearInterval(t);
     }, [processing]);
 
@@ -311,9 +313,7 @@ export default function ChatScreen() {
         {processing && (
           <View style={styles.thinkingBar}>
             <Text style={styles.thinkingText}>Thinking</Text>
-            <Text style={[styles.thinkingDot, { opacity: spinner === 0 ? 1 : 0.3 }]}>●</Text>
-            <Text style={[styles.thinkingDot, { opacity: spinner === 1 ? 1 : 0.3 }]}>●</Text>
-            <Text style={[styles.thinkingDot, { opacity: spinner === 2 ? 1 : 0.3 }]}>●</Text>
+            <Text style={styles.thinkingDot}>{SPINNER_FRAMES[spinner]}</Text>
           </View>
         )}
       </ScrollView>
@@ -488,11 +488,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 6,
-    gap: 4,
+    gap: 8,
   },
   thinkingDot: {
     color: "#a3a3a3",
-    fontSize: 8,
+    fontSize: 16,
+    fontFamily: "monospace",
   },
   thinkingText: {
     color: "#525252",
