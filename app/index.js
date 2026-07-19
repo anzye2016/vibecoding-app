@@ -304,7 +304,7 @@ export default function ChatScreen() {
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
         <TouchableOpacity
-          style={[styles.input, { justifyContent: "center" }]}
+          style={[styles.input]}
           activeOpacity={0.7}
           onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
           disabled={status === "connected" && !processing}
@@ -454,6 +454,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: "#e5e5e5",
     fontSize: 14,
+    textAlignVertical: "top",
   },
   sendBtn: {
     backgroundColor: "#2563eb",
