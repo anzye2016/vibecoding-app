@@ -299,16 +299,16 @@ async function handleMessage(msg) {
 
   let burstCount = 0;
   let lastTime = Date.now();
-  const MAX_BURST = 20;
+  const MAX_BURST = 40;
 
   function onLine(line) {
     const text = stripAnsi(line);
     const now = Date.now();
-    if (text.length < 100 || now - lastTime > 1000) {
+    if (text.length < 30 || now - lastTime > 2000) {
       burstCount = 0;
     }
     lastTime = now;
-    if (text.length >= 100) {
+    if (text.length >= 30) {
       burstCount++;
     }
     if (burstCount > MAX_BURST) {
