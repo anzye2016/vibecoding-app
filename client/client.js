@@ -297,34 +297,25 @@ async function handleMessage(msg) {
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
-  let buf = [];
-  let isCmdSection;
-  let cmdLineCount;
-  const MAX_CMD_LINES = 20;
-
-  function flushBuf() {
-    if (buf.length === 0) return;
-    const first = buf.find(l => l.trim() !== "") || "";
-    isCmdSection = /^\[bash\b/.test(first.trim());
-    cmdLineCount = 0;
-    for (const line of buf) {
-      if (isCmdSection && line.trim() && ++cmdLineCount > MAX_CMD_LINES) {
-        if (cmdLineCount === MAX_CMD_LINES + 1) send({ type: "chunk", text: "\n[Output truncated...]\n" });
-        continue;
-      }
-      send({ type: "chunk", text: line + "\n" });
-    }
-    buf = [];
-  }
+  let burstCount = 0;
+  let lastTime = Date.now();
+  const MAX_BURST = 20;
 
   function onLine(line) {
     const text = stripAnsi(line);
-    if (text.trim() === "") {
-      buf.push(text);
-      flushBuf();
-    } else {
-      buf.push(text);
+    const now = Date.now();
+    if (text.length < 100 || now - lastTime > 1000) {
+      burstCount = 0;
     }
+    lastTime = now;
+    if (text.length >= 100) {
+      burstCount++;
+    }
+    if (burstCount > MAX_BURST) {
+      if (burstCount === MAX_BURST + 1) send({ type: "chunk", text: "\n[Output truncated...]\n" });
+      return;
+    }
+    send({ type: "chunk", text: text + "\n" });
   }
 
   rlOut.on("line", onLine);
@@ -332,7 +323,6 @@ async function handleMessage(msg) {
 
   child.on("close", (code) => {
     currentChild = null;
-    flushBuf();
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
