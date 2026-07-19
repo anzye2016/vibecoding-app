@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Clipboard from "expo-clipboard";
 import MarkdownBlock from "./components/MarkdownBlock";
 
 const RELAY_URL = "wss://wxysyn.com/vibecoding/ws";
@@ -186,10 +185,6 @@ export default function ChatScreen() {
     }
   };
 
-  const copyOutput = async (text) => {
-    await Clipboard.setStringAsync(text);
-  };
-
   const Wrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
   const wrapperProps = Platform.OS === "ios" ? { behavior: "padding", keyboardVerticalOffset: 0 } : {};
 
@@ -286,25 +281,17 @@ export default function ChatScreen() {
           if (msg.type === "user" || msg.type === "history-user") {
             return (
               <TouchableOpacity key={i} activeOpacity={1.0}>
-                <Text style={styles.userLine}>{msg.text}</Text>
+                <Text style={styles.userLine} selectable>{msg.text}</Text>
               </TouchableOpacity>
             );
           }
           if (msg.type === "chunk" || msg.type === "history-assistant") {
-            return (
-              <View key={i}>
-                <MarkdownBlock text={msg.text} />
-              </View>
-            );
+            return <MarkdownBlock key={i} text={msg.text} />;
           }
           if (msg.type === "spacer") {
             return <View key={i} style={{ height: 16 }} />;
           }
-          return (
-            <View key={i}>
-              <MarkdownBlock text={msg.text} />
-            </View>
-          );
+          return <MarkdownBlock key={i} text={msg.text} />;
         })}
         {processing && (
           <View style={styles.thinkingBar}>
