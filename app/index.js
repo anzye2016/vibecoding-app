@@ -54,9 +54,9 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!processing) return;
-      const t = setInterval(() => setSpinner(s => (s + 1) % SPINNER_FRAMES.length), 100);
-      return () => clearInterval(t);
-    }, [processing]);
+    const t = setInterval(() => setSpinner(s => (s + 1) % SPINNER_FRAMES.length), 100);
+    return () => clearInterval(t);
+  }, [processing]);
 
   useEffect(() => {
     try {
@@ -319,20 +319,26 @@ export default function ChatScreen() {
       </ScrollView>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
-        <TextInput
-          style={styles.input}
-          placeholder={status === "connected" ? "Type a message..." : "Not connected"}
-          placeholderTextColor="#525252"
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={status === "connected" && !processing}
-          onTouchStart={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          onSubmitEditing={sendMessage}
-          blurOnSubmit={false}
-        />
+        <TouchableOpacity
+          style={[styles.input, { justifyContent: "center" }]}
+          activeOpacity={0.7}
+          onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          disabled={status === "connected" && !processing}
+        >
+          <TextInput
+            style={styles.inputInner}
+            placeholder={status === "connected" ? "Type a message..." : "Not connected"}
+            placeholderTextColor="#525252"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={status === "connected" && !processing}
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
+          />
+        </TouchableOpacity>
         {processing ? (
           <TouchableOpacity style={styles.cancelBtn} onPress={cancelTask} activeOpacity={0.7}>
             <Text style={styles.cancelBtnText}>Stop</Text>
@@ -457,11 +463,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#262626",
     borderRadius: 12,
+    maxHeight: 100,
+  },
+  inputInner: {
+    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
     color: "#e5e5e5",
     fontSize: 14,
-    maxHeight: 100,
   },
   sendBtn: {
     backgroundColor: "#2563eb",
