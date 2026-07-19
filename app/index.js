@@ -303,21 +303,27 @@ export default function ChatScreen() {
       </ScrollView>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
-        <TextInput
-          style={[styles.input, styles.inputInner]}
-          placeholder={status === "connected" ? "Type a message..." : "Not connected"}
-          placeholderTextColor="#525252"
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          numberOfLines={4}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={status === "connected" && !processing}
-          onTouchStart={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          onSubmitEditing={sendMessage}
-          blurOnSubmit={false}
-        />
+        <TouchableOpacity
+          style={[styles.input]}
+          activeOpacity={0.7}
+          onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          pointerEvents={status === "connected" && !processing ? "none" : "auto"}
+        >
+          <TextInput
+            style={styles.inputInner}
+            placeholder={status === "connected" ? "Type a message..." : "Not connected"}
+            placeholderTextColor="#525252"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            numberOfLines={4}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={status === "connected" && !processing}
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
+          />
+        </TouchableOpacity>
         {processing ? (
           <TouchableOpacity style={styles.cancelBtn} onPress={cancelTask} activeOpacity={0.7}>
             <Text style={styles.cancelBtnText}>Stop</Text>
