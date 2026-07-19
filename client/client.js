@@ -232,6 +232,13 @@ async function handleMessage(msg) {
 
   if (!message.trim()) return;
 
+  if (message.trim() === "!!restart") {
+    console.log("[client] Restart requested");
+    send({ type: "chunk", text: "Restarting client...\n" });
+    setTimeout(() => process.exit(0), 200);
+    return;
+  }
+
   const isWin = dir.match(/^[A-Za-z]:/);
   let actualDir = dir;
   if (isWin) {

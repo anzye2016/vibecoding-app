@@ -304,26 +304,26 @@ export default function ChatScreen() {
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
         <TouchableOpacity
-          style={[styles.input]}
-          activeOpacity={0.7}
+          style={styles.scrollBtn}
           onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          pointerEvents={status === "connected" && !processing ? "none" : "auto"}
+          activeOpacity={0.5}
         >
-          <TextInput
-            style={styles.inputInner}
-            placeholder={status === "connected" ? "Type a message..." : "Not connected"}
-            placeholderTextColor="#525252"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            numberOfLines={4}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={status === "connected" && !processing}
-            onSubmitEditing={sendMessage}
-            blurOnSubmit={false}
-          />
+          <Text style={styles.scrollBtnText}>↓</Text>
         </TouchableOpacity>
+        <TextInput
+          style={[styles.input, styles.inputInner]}
+          placeholder={status === "connected" ? "Type a message..." : "Not connected"}
+          placeholderTextColor="#525252"
+          value={inputText}
+          onChangeText={setInputText}
+          multiline
+          numberOfLines={4}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={status === "connected" && !processing}
+          onSubmitEditing={sendMessage}
+          blurOnSubmit={false}
+        />
         {processing ? (
           <TouchableOpacity style={styles.cancelBtn} onPress={cancelTask} activeOpacity={0.7}>
             <Text style={styles.cancelBtnText}>Stop</Text>
@@ -478,6 +478,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  scrollBtn: {
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#262626",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  scrollBtnText: {
+    color: "#a3a3a3",
+    fontSize: 14,
   },
   thinkingBar: {
     flexDirection: "row",
