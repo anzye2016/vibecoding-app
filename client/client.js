@@ -597,12 +597,24 @@ function onJsonLine(line) {
 
 function cancelCurrent() {
   if (currentChild) {
-    spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
+    try {
+      if (IS_LINUX) {
+        process.kill(-currentChild.pid, "SIGKILL");
+      } else {
+        spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
+      }
+    } catch {}
     currentChild = null;
     send({ type: "cancelled" });
   }
   if (compactChild) {
-    spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
+    try {
+      if (IS_LINUX) {
+        process.kill(-compactChild.pid, "SIGKILL");
+      } else {
+        spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
+      }
+    } catch {}
     compactChild = null;
   }
 }
