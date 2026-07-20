@@ -172,6 +172,7 @@ export default function ChatScreen() {
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return;
       setStatus("disconnected");
       setProcessing(false);
       wsRef.current = null;
@@ -179,6 +180,7 @@ export default function ChatScreen() {
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       setStatus("disconnected");
       setProcessing(false);
       wsRef.current = null;

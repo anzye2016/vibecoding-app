@@ -27,6 +27,7 @@ if (!TOKEN && existsSync(tokenFile)) {
 
 if (!TOKEN) {
   console.error("RELAY_TOKEN env var or .vibecoding-token file is required");
+  try { rmSync(pidFile); } catch {}
   process.exit(1);
 }
 
@@ -35,15 +36,15 @@ if (existsSync(pidFile)) {
   try {
     const oldPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
     if (oldPid && oldPid !== process.pid) {
-      try {
-        process.kill(oldPid, 0);
+      if (process.platform === "win32") {
         console.log(`[client] Killing stale instance PID ${oldPid}`);
-        if (process.platform === "win32") {
-          spawn("taskkill", ["/PID", String(oldPid), "/F"]);
-        } else {
-          process.kill(oldPid, "SIGKILL");
-        }
-      } catch {}
+        spawn("taskkill", ["/PID", String(oldPid), "/F"]);
+        setTimeout(() => {}, 1000);
+      } else {
+        try { process.kill(oldPid, 0); } catch { /* not alive */ }
+        console.log(`[client] Killing stale instance PID ${oldPid}`);
+        process.kill(oldPid, "SIGKILL");
+      }
     }
   } catch {}
 }
@@ -89,19 +90,22 @@ function stripAnsi(str) {
 
 function runOpenCode(dir, args, opts = {}) {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], ...opts });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       if (code === 0) resolve(stdout.trim());
       else {
         console.error("[client] opencode stderr:", stderr);
         reject(new Error(`exit ${code}`));
       }
     });
-    child.on("error", reject);
+    child.on("error", (err) => { if (!settled) { settled = true; reject(err); } });
   });
 }
 
@@ -117,24 +121,28 @@ async function dirExists(wslDir) {
 
 function runPython(script, args = []) {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const child = spawn("python", [script, ...args], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       if (code === 0) resolve(stdout.trim());
       else {
         console.error("[client] python stderr:", stderr);
         reject(new Error(`exit ${code}`));
       }
     });
-    child.on("error", reject);
+    child.on("error", (err) => { if (!settled) { settled = true; reject(err); } });
   });
 }
 
 function pipeToPython(script, input) {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
     try { writeFileSync(tmpFile, input, "utf8"); } catch (e) { reject(e); return; }
     const child = spawn("python", [script, tmpFile], { stdio: ["ignore", "pipe", "pipe"] });
@@ -143,6 +151,8 @@ function pipeToPython(script, input) {
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       try { rmSync(tmpFile); } catch {}
       if (code === 0) resolve(stdout.trim());
       else {
@@ -150,7 +160,7 @@ function pipeToPython(script, input) {
         reject(new Error(`exit ${code}`));
       }
     });
-    child.on("error", (err) => { try { rmSync(tmpFile); } catch {} reject(err); });
+    child.on("error", (err) => { if (!settled) { settled = true; try { rmSync(tmpFile); } catch {} reject(err); } });
   });
 }
 
@@ -663,5 +673,12 @@ function shutdown() {
   if (ws) ws.close();
   process.exit(0);
 }
+
+process.on("uncaughtException", (err) => {
+  console.error("[client] Uncaught:", err.message);
+  cancelCurrent();
+  if (ws) ws.close();
+  process.exit(1);
+});
 
 connect();

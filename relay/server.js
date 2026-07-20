@@ -91,8 +91,31 @@ wss.on("connection", (ws, req) => {
 
   ws.isAlive = true;
   ws.on("pong", () => { ws.isAlive = true; });
+
+  function cleanup() {
+    clearInterval(pingTimer);
+    if (role === "pc") {
+      if (pair.pc === ws) {
+        pair.pc = null;
+        pair.lastActivity = Date.now();
+        notifyPhone(room, { type: "status", online: false });
+        console.log(`[${ts()}] DISCONNECT room=${room} role=pc`);
+      }
+    } else {
+      if (pair.phone === ws) {
+        pair.phone = null;
+        pair.lastActivity = Date.now();
+        console.log(`[${ts()}] DISCONNECT room=${room} role=phone`);
+      }
+    }
+  }
+
   const pingTimer = setInterval(() => {
-    if (!ws.isAlive) return ws.terminate();
+    if (!ws.isAlive) {
+      cleanup();
+      ws.terminate();
+      return;
+    }
     ws.isAlive = false;
     ws.ping();
   }, 30000);
@@ -138,26 +161,11 @@ wss.on("connection", (ws, req) => {
     }
   });
 
-  ws.on("close", () => {
-    clearInterval(pingTimer);
-    if (role === "pc") {
-      if (pair.pc === ws) {
-        pair.pc = null;
-        pair.lastActivity = Date.now();
-        notifyPhone(room, { type: "status", online: false });
-        console.log(`[${ts()}] DISCONNECT room=${room} role=pc`);
-      }
-    } else {
-      if (pair.phone === ws) {
-        pair.phone = null;
-        pair.lastActivity = Date.now();
-        console.log(`[${ts()}] DISCONNECT room=${room} role=phone`);
-      }
-    }
-  });
+  ws.on("close", () => { cleanup(); });
 
   ws.on("error", (err) => {
     console.error(`[${ts()}] ERROR room=${room} role=${role} ${err.message}`);
+    cleanup();
   });
 });
 

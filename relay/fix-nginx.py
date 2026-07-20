@@ -1,4 +1,5 @@
-import sys, json, os
+import sys, json, os, tempfile
+from urllib.parse import urlparse
 
 config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json")
 try:
@@ -7,7 +8,9 @@ try:
 except Exception:
     config = {}
 
-domain = config.get("relayOrigin", "https://localhost").replace("https://", "").replace("http://", "")
+domain = config.get("relayOrigin", "https://localhost")
+parsed = urlparse(domain)
+domain = parsed.hostname or domain.replace("https://", "").replace("http://", "")
 path = f"/etc/nginx/sites-available/{domain}"
 
 vibecoding_block = """    # === VibeCoding ===
@@ -37,9 +40,19 @@ with open(path, "r") as f:
 old = "        limit_conn conn_static 50;\n        proxy_pass http://127.0.0.1:8765/;"
 new = vibecoding_block + "        limit_conn conn_static 50;\n        proxy_pass http://127.0.0.1:8765/;"
 
+if old not in content:
+    print("error: injection anchor not found in nginx config", file=sys.stderr)
+    sys.exit(1)
+
 content = content.replace(old, new, 1)
 
-with open(path, "w") as f:
-    f.write(content)
-
-print("done")
+tmp = tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(path), delete=False, suffix=".tmp")
+try:
+    tmp.write(content)
+    tmp.close()
+    os.replace(tmp.name, path)
+    print("done")
+except Exception as e:
+    os.unlink(tmp.name)
+    print(f"error: {e}", file=sys.stderr)
+    sys.exit(1)

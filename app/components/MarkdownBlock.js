@@ -47,6 +47,14 @@ export default function MarkdownBlock({ text }) {
 
   flushText();
 
+  if (inCode) {
+    elements.push(
+      <View key={elements.length} style={styles.codeBlock}>
+        <Text style={styles.codeText} selectable>{codeLines.join("\n")}</Text>
+      </View>
+    );
+  }
+
   return <View style={styles.container}>{elements}</View>;
 }
 
