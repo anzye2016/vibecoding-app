@@ -135,8 +135,9 @@ async function getLastSession(dir) {
   const sessions = await listSessions(dir);
   if (sessions.length === 0) return null;
   const named = sessions.filter(s => !s.title.startsWith("New session"));
-  const target = named.length > 0 ? named[0] : sessions[0];
-  return target.id;
+  const candidates = named.length > 0 ? named : sessions;
+  candidates.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  return candidates[0].id;
 }
 
 async function loadHistory(dir, sessionId) {
