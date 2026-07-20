@@ -29,8 +29,7 @@ msgs = db.execute(
     (session_id,)
 ).fetchall()
 
-cum_in = cum_out = 0
-last_in = last_out = 0
+last_ctx = last_out = 0
 model = variant = ""
 for (r,) in msgs:
     d = json.loads(r)
@@ -40,10 +39,8 @@ for (r,) in msgs:
     cache = tokens.get("cache", {})
     ctx = inp + cache.get("read", 0)
     if ctx > 0 or out > 0:
-        last_in = ctx
+        last_ctx = ctx
         last_out = out
-    cum_in += inp
-    cum_out += out
     mid = d.get("modelID", "")
     if mid:
         model = mid
@@ -52,10 +49,8 @@ for (r,) in msgs:
             variant = v
 
 print(json.dumps({
-    "last_in": last_in,
-    "last_out": last_out,
-    "sum_in": cum_in,
-    "sum_out": cum_out,
+    "ctx": last_ctx,
+    "out": last_out,
     "model": model,
     "variant": variant,
 }))
