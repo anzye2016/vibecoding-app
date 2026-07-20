@@ -129,19 +129,19 @@ async function loadHistory(dir, sessionId) {
   try {
     let raw;
     const isWin = dir.match(/^[A-Za-z]:/);
+    let exportOut;
     if (isWin) {
-      const exportOut = await runOpenCode(dir, ["export", sessionId]);
-      if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
-      raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
+      exportOut = await runOpenCode(dir, ["export", sessionId]);
     } else {
-      const script = "/mnt/c/vibecoding-app/client/last5.py";
       const safeDir = dir
         .replace(/\\/g, "\\\\")
         .replace(/"/g, '\\"')
         .replace(/\$/g, '\\$')
         .replace(/`/g, '\\`');
-      raw = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
+      exportOut = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null`);
     }
+    if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
+    raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
     if (!raw) { console.warn("[client] loadHistory: python returned empty, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
