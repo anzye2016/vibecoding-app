@@ -29,6 +29,7 @@ let currentChild = null;
 let ws = null;
 let reconnectTimer = null;
 const sessionCache = new Map();
+const newSessionDirs = new Set();
 
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
@@ -104,7 +105,13 @@ function pipeToPython(script, input) {
   });
 }
 
-async function getLastSession(dir) {
+function normalizeDir(d) {
+  if (d.match(/^[A-Za-z]:/)) return "/mnt/" + d[0].toLowerCase() + d.slice(2).replace(/\\/g, "/");
+  return d.replace(/\\/g, "/");
+}
+
+async function listSessions(dir) {
+  if (!dir) return [];
   try {
     let raw;
     if (dir.match(/^[A-Za-z]:/)) {
@@ -112,17 +119,24 @@ async function getLastSession(dir) {
     } else {
       raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
     }
-    if (!raw) return null;
+    if (!raw) return [];
     const sessions = JSON.parse(raw);
-    if (Array.isArray(sessions)) {
-      const named = sessions.filter(s => !s.title.startsWith("New session"));
-      const target = named.length > 0 ? named[0] : sessions[0];
-      return target ? target.id : null;
-    }
-  } catch (e) {
-    console.error("[client] Failed to get session list:", e.message);
+    if (!Array.isArray(sessions)) return [];
+    const nd = normalizeDir(dir);
+    return sessions
+      .filter(s => normalizeDir(s.directory || "") === nd)
+      .map(s => ({ id: s.id, title: s.title, updated: s.updated }));
+  } catch {
+    return [];
   }
-  return null;
+}
+
+async function getLastSession(dir) {
+  const sessions = await listSessions(dir);
+  if (sessions.length === 0) return null;
+  const named = sessions.filter(s => !s.title.startsWith("New session"));
+  const target = named.length > 0 ? named[0] : sessions[0];
+  return target.id;
 }
 
 async function loadHistory(dir, sessionId) {
@@ -159,6 +173,8 @@ async function sendHistory(msg) {
   const isWin = dir.match(/^[A-Za-z]:/);
   const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
 
+  if (newSessionDirs.has(cacheKey)) return;
+
   if (!sessionCache.has(cacheKey)) {
     const sid = await getLastSession(dir);
     if (sid) { sessionCache.set(cacheKey, sid); }
@@ -169,6 +185,28 @@ async function sendHistory(msg) {
     await loadHistory(dir, sid);
   } else {
     console.warn("[client] sendHistory: no cached session for", cacheKey);
+  }
+}
+
+async function handleListSessions(msg) {
+  const dir = msg.dir || process.cwd();
+  const sessions = await listSessions(dir);
+  const isWin = dir.match(/^[A-Za-z]:/);
+  const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
+  const current = sessionCache.get(cacheKey) || null;
+  send({ type: "sessions", sessions, current, dir });
+}
+
+function handleSelectSession(msg) {
+  const dir = msg.dir || process.cwd();
+  const isWin = dir.match(/^[A-Za-z]:/);
+  const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
+  if (msg.sessionId) {
+    sessionCache.set(cacheKey, msg.sessionId);
+    newSessionDirs.delete(cacheKey);
+  } else {
+    sessionCache.delete(cacheKey);
+    newSessionDirs.add(cacheKey);
   }
 }
 
@@ -202,6 +240,12 @@ function connect() {
         send({ type: "processing" });
       }
       sendHistory(msg);
+    } else if (msg.type === "list_sessions") {
+      console.log("[client] list_sessions received, dir:", msg.dir);
+      handleListSessions(msg);
+    } else if (msg.type === "select_session") {
+      console.log("[client] select_session, id:", msg.sessionId, "dir:", msg.dir);
+      handleSelectSession(msg);
     }
   });
 
@@ -275,7 +319,9 @@ async function handleMessage(msg) {
     }
   }
 
-  if (!sessionCache.has(actualDir)) {
+  if (newSessionDirs.has(actualDir)) {
+    newSessionDirs.delete(actualDir);
+  } else if (!sessionCache.has(actualDir)) {
     const sid = await getLastSession(dir);
     if (sid) {
       sessionCache.set(actualDir, sid);

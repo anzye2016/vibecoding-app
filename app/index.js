@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Modal,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -38,6 +40,10 @@ export default function ChatScreen() {
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
   const historyLoadedRef = useRef(false);
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [showSessionPicker, setShowSessionPicker] = useState(false);
+  const [sessionLabel, setSessionLabel] = useState("(auto)");
 
   const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 
@@ -115,6 +121,7 @@ export default function ChatScreen() {
             if (!historyLoadedRef.current) {
               ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
             }
+            ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
             setProcessing(false);
@@ -141,6 +148,15 @@ export default function ChatScreen() {
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
+          }
+        } else if (msg.type === "sessions") {
+          setSessions(msg.sessions || []);
+          setCurrentSessionId(msg.current || null);
+          if (!msg.current) {
+            setSessionLabel("(new)");
+          } else {
+            const cur = (msg.sessions || []).find(s => s.id === msg.current);
+            setSessionLabel(cur ? cur.title : "(auto)");
           }
         }
       } catch (err) {
@@ -191,6 +207,19 @@ export default function ChatScreen() {
     if (wsRef.current && wsRef.current.readyState === 1) {
       wsRef.current.send(JSON.stringify({ type: "cancel" }));
     }
+  };
+
+  const selectSession = (sessionId, title) => {
+    setShowSessionPicker(false);
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify({ type: "select_session", sessionId: sessionId || null, dir: workDir }));
+      setMessages([]);
+      historyLoadedRef.current = false;
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+      wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+    }
+    setSessionLabel(title || "(new)");
+    setCurrentSessionId(sessionId || null);
   };
 
   const Wrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
@@ -258,6 +287,16 @@ export default function ChatScreen() {
               {status === "connected" ? "Disconnect" : status === "connecting" ? "Connecting..." : "Connect"}
             </Text>
           </TouchableOpacity>
+          {status === "connected" && (
+            <TouchableOpacity
+              style={styles.sessionBtn}
+              onPress={() => setShowSessionPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sessionBtnLabel}>Session</Text>
+              <Text style={styles.sessionBtnValue} numberOfLines={1}>{sessionLabel}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -339,6 +378,48 @@ export default function ChatScreen() {
           </TouchableOpacity>
         )}
       </View>
+      <Modal
+        visible={showSessionPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSessionPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sessions</Text>
+              <TouchableOpacity onPress={() => setShowSessionPicker(false)} activeOpacity={0.7}>
+                <Text style={styles.modalClose}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.sessionItem, !currentSessionId && styles.sessionItemActive]}
+              onPress={() => selectSession(null, null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sessionItemTitle, !currentSessionId && styles.sessionItemTitleActive]}>+ New session</Text>
+            </TouchableOpacity>
+            <FlatList
+              data={sessions}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.sessionItem, currentSessionId === item.id && styles.sessionItemActive]}
+                  onPress={() => selectSession(item.id, item.title)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sessionItemTitle, currentSessionId === item.id && styles.sessionItemTitleActive]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.sessionItemDate}>
+                    {new Date(item.updated).toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </Wrapper>
   );
 }
@@ -493,5 +574,77 @@ const styles = StyleSheet.create({
     color: "#525252",
     fontSize: 14,
     fontStyle: "italic",
+  },
+  sessionBtn: {
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#262626",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sessionBtnLabel: {
+    color: "#737373",
+    fontSize: 13,
+  },
+  sessionBtnValue: {
+    color: "#e5e5e5",
+    fontSize: 13,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#141414",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: "60%",
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1f1f1f",
+  },
+  modalTitle: {
+    color: "#e5e5e5",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalClose: {
+    color: "#737373",
+    fontSize: 14,
+  },
+  sessionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1f1f1f",
+  },
+  sessionItemActive: {
+    backgroundColor: "#1a2a3a",
+  },
+  sessionItemTitle: {
+    color: "#e5e5e5",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  sessionItemTitleActive: {
+    color: "#93c5fd",
+  },
+  sessionItemDate: {
+    color: "#525252",
+    fontSize: 12,
+    marginTop: 4,
   },
 });
