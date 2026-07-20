@@ -30,7 +30,24 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-writeFileSync(join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt"), String(process.pid));
+const pidFile = join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt");
+if (existsSync(pidFile)) {
+  try {
+    const oldPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
+    if (oldPid && oldPid !== process.pid) {
+      try {
+        process.kill(oldPid, 0);
+        console.log(`[client] Killing stale instance PID ${oldPid}`);
+        if (process.platform === "win32") {
+          spawn("taskkill", ["/PID", String(oldPid), "/F"]);
+        } else {
+          process.kill(oldPid, "SIGKILL");
+        }
+      } catch {}
+    }
+  } catch {}
+}
+writeFileSync(pidFile, String(process.pid));
 
 let currentChild = null;
 let compactChild = null;
