@@ -12,6 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
 const OPENDCODE_MODE = process.env.OPENDCODE_MODE || "json";
 const OPENDCODE_BIN = process.env.OPENDCODE_BIN || join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
+const COMPACT_PYTHON = process.env.COMPACT_PYTHON || "C:\\Users\\anzye\\projects\\screen-agent\\.venv\\Scripts\\python.exe";
 let TOKEN = process.env.RELAY_TOKEN;
 
 if (!TOKEN && existsSync(tokenFile)) {
@@ -26,6 +27,7 @@ if (!TOKEN) {
 writeFileSync(join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt"), String(process.pid));
 
 let currentChild = null;
+let compactChild = null;
 let ws = null;
 let reconnectTimer = null;
 const sessionCache = new Map();
@@ -323,6 +325,69 @@ async function handleMessage(msg) {
     return;
   }
 
+  if (message.trim() === "/compact") {
+    const cIsWin = dir.match(/^[A-Za-z]:/);
+    const cActualDir = cIsWin
+      ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/")
+      : dir;
+
+    const sid = sessionCache.get(cActualDir) || null;
+    if (!sid) {
+      send({ type: "error", text: "No active session. Send a message first, then use /compact." });
+      return;
+    }
+
+    if (compactChild) {
+      send({ type: "error", text: "A compact is already in progress." });
+      return;
+    }
+
+    console.log("[client] /compact on session:", sid);
+    send({ type: "chunk", text: "[compact] Opening terminal...\n" });
+
+    const ocBin = cIsWin ? OPENDCODE_BIN : getOpenCode(cActualDir);
+    const compactScript = join(__dirname, "compact.py");
+
+    compactChild = spawn(COMPACT_PYTHON, [
+      compactScript,
+      "--dir", cIsWin ? dir : cActualDir,
+      "--session", sid,
+      "--mode", cIsWin ? "win" : "wsl",
+      "--opencode", ocBin,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+
+    let cstdout = "";
+    let cstderr = "";
+    compactChild.stdout.on("data", (d) => { cstdout += d; });
+    compactChild.stderr.on("data", (d) => { cstderr += d; });
+
+    compactChild.on("close", (code) => {
+      compactChild = null;
+      try {
+        const result = JSON.parse(cstdout.trim() || "{}");
+        if (result.success) {
+          send({ type: "chunk", text: "[compact] " + result.message + "\n" });
+          send({ type: "done", code: 0 });
+          console.log("[client] compact done");
+        } else {
+          const detail = cstderr.trim() || result.message || "failed";
+          send({ type: "error", text: "Compact: " + detail });
+          console.error("[client] compact stderr:", cstderr.trim());
+        }
+      } catch {
+        send({ type: "error", text: "Compact: " + (cstderr.trim() || "script failed") });
+        console.error("[client] compact stderr:", cstderr.trim());
+      }
+    });
+
+    compactChild.on("error", (err) => {
+      compactChild = null;
+      send({ type: "error", text: "Compact: " + err.message });
+    });
+
+    return;
+  }
+
   const isWin = dir.match(/^[A-Za-z]:/);
   let actualDir = dir;
   if (isWin) {
@@ -446,6 +511,7 @@ async function handleMessage(msg) {
             const s = JSON.parse(out);
             if (!s.error) {
               let line = `c=${s.ctx.toLocaleString()} o=${s.out.toLocaleString()}`;
+              if (s.reasoning) line += ` r=${s.reasoning.toLocaleString()}`;
               if (s.model) line += `\n${s.model}${s.variant ? " " + s.variant : ""}`;
               send({ type: "chunk", text: line + "\n" });
             }
@@ -497,6 +563,10 @@ function cancelCurrent() {
     spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
     currentChild = null;
     send({ type: "cancelled" });
+  }
+  if (compactChild) {
+    spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
+    compactChild = null;
   }
 }
 

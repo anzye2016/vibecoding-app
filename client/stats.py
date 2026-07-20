@@ -5,7 +5,7 @@ session_id = sys.argv[1]
 paths = [
     os.path.expanduser(r"~\.local\share\opencode\opencode.db"),
     "/home/anzye/.local/share/opencode/opencode.db",
-    "/home/anzye/.opencode/opencode.db",
+    "/mnt/c/Users/anzye/.local/share/opencode/opencode.db",
 ]
 
 db = None
@@ -29,18 +29,20 @@ msgs = db.execute(
     (session_id,)
 ).fetchall()
 
-last_ctx = last_out = 0
+last_ctx = last_out = last_reasoning = 0
 model = variant = ""
 for (r,) in msgs:
     d = json.loads(r)
     tokens = d.get("tokens", {})
     inp = tokens.get("input", 0)
     out = tokens.get("output", 0)
+    reasoning = tokens.get("reasoning", 0)
     cache = tokens.get("cache", {})
     ctx = inp + cache.get("read", 0)
     if ctx > 0 or out > 0:
         last_ctx = ctx
         last_out = out
+        last_reasoning = reasoning
     mid = d.get("modelID", "")
     if mid:
         model = mid
@@ -51,6 +53,7 @@ for (r,) in msgs:
 print(json.dumps({
     "ctx": last_ctx,
     "out": last_out,
+    "reasoning": last_reasoning,
     "model": model,
     "variant": variant,
 }))
