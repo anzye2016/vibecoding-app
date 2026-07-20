@@ -37,8 +37,10 @@ for (r,) in msgs:
     tokens = d.get("tokens", {})
     inp = tokens.get("input", 0)
     out = tokens.get("output", 0)
-    if inp > 0 or out > 0:
-        last_in = inp
+    cache = tokens.get("cache", {})
+    ctx = inp + cache.get("read", 0)
+    if ctx > 0 or out > 0:
+        last_in = ctx
         last_out = out
     cum_in += inp
     cum_out += out
