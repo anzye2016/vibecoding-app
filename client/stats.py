@@ -42,7 +42,9 @@ for (r,) in msgs:
     mid = d.get("modelID", "")
     if mid:
         model = mid
-        variant = d.get("variant", "")
+        v = d.get("variant", "")
+        if v:
+            variant = v
 
 context = total_in + total_cache
 total = total_in + total_out + total_reason
