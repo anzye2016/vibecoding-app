@@ -104,7 +104,6 @@ export default function ChatScreen() {
       setMessages([]);
       historyLoadedRef.current = false;
       addMessage({ type: "status", text: "--- Connected ---" });
-      ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
     };
 
     ws.onmessage = (e) => {
