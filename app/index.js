@@ -254,6 +254,15 @@ export default function ChatScreen() {
         <View style={styles.setupBar}>
           <TextInput
             style={styles.setupInput}
+            placeholder={`Relay URL (default: ${DEFAULT_RELAY})`}
+            placeholderTextColor="#525252"
+            value={relayUrl}
+            onChangeText={setRelayUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={styles.setupInput}
             placeholder="Token"
             placeholderTextColor="#525252"
             value={token}
@@ -277,15 +286,6 @@ export default function ChatScreen() {
             placeholderTextColor="#525252"
             value={workDir}
             onChangeText={setWorkDir}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            style={styles.setupInput}
-            placeholder={`Relay URL (default: ${DEFAULT_RELAY})`}
-            placeholderTextColor="#525252"
-            value={relayUrl}
-            onChangeText={setRelayUrl}
             autoCapitalize="none"
             autoCorrect={false}
           />
