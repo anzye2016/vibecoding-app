@@ -5,12 +5,13 @@ import { fileURLToPath } from "url";
 import readline from "readline";
 import WebSocket from "ws";
 
-const RELAY_URL = process.env.RELAY_URL || config.relayUrl || "wss://localhost:8766/vibecoding/ws";
-const ROOM = process.env.ROOM || "default";
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const configPath = join(__dirname, "..", "config.json");
 const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
+
+const RELAY_URL = process.env.RELAY_URL || config.relayUrl || "wss://localhost:8766/vibecoding/ws";
+const ROOM = process.env.ROOM || "default";
+
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
 const OPENDCODE_MODE = process.env.OPENDCODE_MODE || "json";
 const OPENDCODE_BIN = process.env.OPENDCODE_BIN || (
