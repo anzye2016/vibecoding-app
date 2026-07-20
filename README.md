@@ -89,6 +89,28 @@ node client.js
 
 在 `config.json` 中配置 `allowedDirs` 数组（支持 Windows/WSL 格式，最后不要带 `/`）。也可以用 `ALLOWED_DIRS_FILE` 指向一个文本文件。
 
+### 开机自启（Windows）
+
+`scripts/vibecoding-client-wrapper.ps1` 是一个守护脚本：启动客户端 → 监听进程退出 → 5 秒后自动重启。
+
+**1. 修改脚本中的项目路径**（如果不是默认路径）：
+
+```powershell
+$clientJs = "C:\vibecoding-app\client\client.js"   # 改为你的路径
+```
+
+**2. 创建计划任务**（管理员 PowerShell）：
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" `
+  -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"C:\vibecoding-app\scripts\vibecoding-client-wrapper.ps1`""
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "vibecoding-client" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest
+```
+
+重启后任务管理器的"任务计划程序"里可见。
+
 ## 输出模式
 
 | 模式 | 触发 | 行为 |
