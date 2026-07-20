@@ -343,8 +343,16 @@ async function handleMessage(msg) {
   }
   const lastSessionId = sessionCache.get(actualDir) || null;
 
+  let modelFlag = "";
+  let runMessage = message;
+  const m = message.match(/^\/model\s+(\S+)/);
+  if (m) {
+    modelFlag = m[1].includes("/") ? m[1] : "deepseek/" + m[1];
+    runMessage = message.slice(m[0].length).trim() || "hi";
+  }
+
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
-  const escapedMsg = message
+  const escapedMsg = runMessage
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\$/g, '\\$')
@@ -357,7 +365,8 @@ async function handleMessage(msg) {
   if (isWin) {
     const args = ["run", ...fmtFlag];
     if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
-    args.push(message);
+    if (modelFlag) args.push("-m", modelFlag);
+    args.push(runMessage);
     child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running opencode natively in ${dir}: ${message}`);
   } else {
@@ -366,7 +375,7 @@ async function handleMessage(msg) {
       .replace(/"/g, '\\"')
       .replace(/\$/g, '\\$')
       .replace(/`/g, '\\`');
-    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run${useJson ? " --format json" : ""} ${sessionArg} "${escapedMsg}"`;
+    const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run${useJson ? " --format json" : ""} ${sessionArg}${modelFlag ? ` -m "${modelFlag}"` : ""} "${escapedMsg}"`;
     const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
     child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
