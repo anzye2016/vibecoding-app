@@ -1,9 +1,29 @@
 import sqlite3, json, sys, os
 
 session_id = sys.argv[1]
-db_path = os.path.expanduser(r"~\.local\share\opencode\opencode.db")
 
-db = sqlite3.connect(db_path)
+paths = [
+    os.path.expanduser(r"~\.local\share\opencode\opencode.db"),
+    "/home/anzye/.local/share/opencode/opencode.db",
+    "/home/anzye/.opencode/opencode.db",
+]
+
+db = None
+for p in paths:
+    if os.path.exists(p):
+        try:
+            db = sqlite3.connect(p)
+            if db.execute("SELECT 1 FROM message WHERE session_id=? LIMIT 1", (session_id,)).fetchone():
+                break
+            db.close()
+            db = None
+        except:
+            db = None
+
+if not db:
+    print(json.dumps({"error": "session not found"}))
+    sys.exit(0)
+
 msgs = db.execute(
     "SELECT data FROM message WHERE session_id=? AND json_extract(data, '$.tokens') IS NOT NULL",
     (session_id,)
@@ -19,15 +39,13 @@ for (r,) in msgs:
     total_reason += tokens.get("reasoning", 0)
     total_cache += cache.get("read", 0) + cache.get("write", 0)
 
-# Context is typically input + cache_read (what's sent to the model)
 context = total_in + total_cache
 total = total_in + total_out + total_reason
 
-result = {
+print(json.dumps({
     "context": context,
     "total": total,
     "input": total_in,
     "output": total_out,
     "reasoning": total_reason,
-}
-print(json.dumps(result))
+}))

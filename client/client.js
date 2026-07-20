@@ -436,10 +436,17 @@ async function handleMessage(msg) {
       try {
         const sid = lastSessionId || await getLastSession(dir);
         if (sid) {
-          const out = await runPython(join(__dirname, "stats.py"), [sid]);
+          let out;
+          if (isWin) {
+            out = await runPython(join(__dirname, "stats.py"), [sid]);
+          } else {
+            out = await wsl(`python3 /mnt/c/vibecoding-app/client/stats.py "${sid}"`);
+          }
           if (out) {
             const s = JSON.parse(out);
-            send({ type: "chunk", text: `[tokens] context=${s.context.toLocaleString()} total=${s.total.toLocaleString()}\n` });
+            if (!s.error) {
+              send({ type: "chunk", text: `[tokens] context=${s.context.toLocaleString()} total=${s.total.toLocaleString()}\n` });
+            }
           }
         }
       } catch {}
