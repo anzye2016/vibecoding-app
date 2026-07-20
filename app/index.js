@@ -191,7 +191,6 @@ export default function ChatScreen() {
   const disconnect = () => {
     if (wsRef.current) {
       wsRef.current.close();
-      wsRef.current = null;
     }
     setProcessing(false);
   };

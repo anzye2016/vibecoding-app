@@ -3,8 +3,7 @@ import sqlite3, json, sys, os
 session_id = sys.argv[1]
 paths = sys.argv[2:]
 
-if not paths:
-    paths = [os.path.expanduser(r"~\.local\share\opencode\opencode.db")]
+paths.append(os.path.expanduser(r"~\.local\share\opencode\opencode.db"))
 
 db = None
 for p in paths:
