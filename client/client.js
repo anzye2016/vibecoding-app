@@ -445,7 +445,7 @@ async function handleMessage(msg) {
           if (out) {
             const s = JSON.parse(out);
             if (!s.error) {
-              send({ type: "chunk", text: `i=${Math.round(s.in/1000)}k o=${Math.round(s.out/1000)}k ${s.model || ""}${s.variant ? " " + s.variant : ""}\n` });
+              send({ type: "chunk", text: `i=${Math.round(s.in/1000)}k o=${Math.round(s.out/1000)}k t=${Math.round(s.total/1000)}k ${s.model || ""}${s.variant ? " " + s.variant : ""}\n` });
             }
           }
         }
