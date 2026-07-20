@@ -7,12 +7,23 @@ export default function MarkdownBlock({ text }) {
   const lines = text.split("\n");
   let inCode = false;
   let codeLines = [];
+  let textLines = [];
+
+  function flushText() {
+    if (textLines.length > 0) {
+      elements.push(
+        <Text key={elements.length} style={styles.line} selectable>{textLines.join("\n")}</Text>
+      );
+      textLines = [];
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (line.match(/^```/)) {
       if (!inCode) {
+        flushText();
         inCode = true;
         codeLines = [];
       } else {
@@ -31,10 +42,10 @@ export default function MarkdownBlock({ text }) {
       continue;
     }
 
-    elements.push(
-      <Text key={elements.length} style={styles.line} selectable>{line}</Text>
-    );
+    textLines.push(line);
   }
+
+  flushText();
 
   return <View style={styles.container}>{elements}</View>;
 }
