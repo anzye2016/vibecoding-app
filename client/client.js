@@ -131,7 +131,7 @@ async function loadHistory(dir, sessionId) {
     const isWin = dir.match(/^[A-Za-z]:/);
     if (isWin) {
       const exportOut = await runOpenCode(dir, ["export", sessionId]);
-      if (!exportOut) return;
+      if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
       raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
     } else {
       const script = "/mnt/c/vibecoding-app/client/last5.py";
@@ -142,13 +142,13 @@ async function loadHistory(dir, sessionId) {
         .replace(/`/g, '\\`');
       raw = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null | python3 "${script}"`);
     }
-    if (!raw) return;
+    if (!raw) { console.warn("[client] loadHistory: python returned empty, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
-    if (rounds.length === 0) return;
+    if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
     send({ type: "history", rounds });
     console.log(`[client] Sent ${rounds.length} history rounds`);
   } catch (e) {
-    console.error("[client] Failed to load history:", e.message);
+    console.error("[client] loadHistory error:", e.message);
   }
 }
 
@@ -161,11 +161,14 @@ async function sendHistory(msg) {
 
   if (!sessionCache.has(cacheKey)) {
     const sid = await getLastSession(dir);
-    if (sid) sessionCache.set(cacheKey, sid);
+    if (sid) { sessionCache.set(cacheKey, sid); }
+    else { console.warn("[client] sendHistory: no session found for", dir); return; }
   }
   const sid = sessionCache.get(cacheKey);
   if (sid) {
     await loadHistory(dir, sid);
+  } else {
+    console.warn("[client] sendHistory: no cached session for", cacheKey);
   }
 }
 

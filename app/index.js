@@ -37,6 +37,7 @@ export default function ChatScreen() {
   const [showSetup, setShowSetup] = useState(true);
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
+  const historyLoadedRef = useRef(false);
 
   const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 
@@ -101,6 +102,7 @@ export default function ChatScreen() {
     ws.onopen = () => {
       setStatus("connected");
       setMessages([]);
+      historyLoadedRef.current = false;
       addMessage({ type: "status", text: "--- Connected ---" });
       ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
     };
@@ -111,6 +113,9 @@ export default function ChatScreen() {
         if (msg.type === "status") {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
+            if (!historyLoadedRef.current) {
+              ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
+            }
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
             setProcessing(false);
@@ -127,17 +132,18 @@ export default function ChatScreen() {
           setProcessing(false);
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "history") {
+          historyLoadedRef.current = true;
           if (msg.rounds && Array.isArray(msg.rounds)) {
             msg.rounds.forEach((r, idx) => {
               if (idx > 0) addMessage({ type: "spacer" });
-              addMessage({ type: "history-user", text: r.user });
+              addMessage({ type: "history-user", text: `> ${r.user}` });
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
           }
         }
-      } catch (e) {
-        console.warn("[ws] parse error:", e.message);
+      } catch (err) {
+        console.warn("[ws] parse error:", err.message);
       }
     };
 
@@ -303,13 +309,6 @@ export default function ChatScreen() {
       </ScrollView>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
-        <TouchableOpacity
-          style={styles.scrollBtn}
-          onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          activeOpacity={0.5}
-        >
-          <Text style={styles.scrollBtnText}>↓</Text>
-        </TouchableOpacity>
         <TextInput
           style={[styles.input, styles.inputInner]}
           placeholder={status === "connected" ? "Type a message..." : "Not connected"}
@@ -320,7 +319,7 @@ export default function ChatScreen() {
           numberOfLines={4}
           autoCapitalize="none"
           autoCorrect={false}
-          editable={status === "connected" && !processing}
+          editable={status === "connected"}
           onSubmitEditing={sendMessage}
           blurOnSubmit={false}
         />
@@ -478,18 +477,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
-  },
-  scrollBtn: {
-    backgroundColor: "#1a1a1a",
-    borderWidth: 1,
-    borderColor: "#262626",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  scrollBtnText: {
-    color: "#a3a3a3",
-    fontSize: 14,
   },
   thinkingBar: {
     flexDirection: "row",
