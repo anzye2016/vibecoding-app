@@ -15,15 +15,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MarkdownBlock from "./components/MarkdownBlock";
-import config from "../config.json";
-
-const RELAY_URL = config.relayUrl || "wss://localhost:8766/vibecoding/ws";
 
 const STORAGE_KEYS = {
   TOKEN: "vibecoding_token",
   ROOM: "vibecoding_room",
   DIR: "vibecoding_dir",
+  RELAY: "vibecoding_relay",
 };
+
+const DEFAULT_RELAY = "wss://localhost:8766/vibecoding/ws";
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -33,6 +33,7 @@ export default function ChatScreen() {
   const [token, setToken] = useState("");
   const [roomId, setRoomId] = useState("");
   const [workDir, setWorkDir] = useState("");
+  const [relayUrl, setRelayUrl] = useState("");
   const [status, setStatus] = useState("disconnected");
   const [processing, setProcessing] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -70,6 +71,7 @@ export default function ChatScreen() {
       AsyncStorage.getItem(STORAGE_KEYS.TOKEN).then((v) => { if (v) setToken(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.ROOM).then((v) => { if (v) setRoomId(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.DIR).then((v) => { if (v) setWorkDir(v); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.RELAY).then((v) => { if (v) setRelayUrl(v); }).catch(() => {});
     } catch (_) {}
   }, []);
 
@@ -84,6 +86,10 @@ export default function ChatScreen() {
   useEffect(() => {
     if (workDir) AsyncStorage.setItem(STORAGE_KEYS.DIR, workDir);
   }, [workDir]);
+
+  useEffect(() => {
+    if (relayUrl) AsyncStorage.setItem(STORAGE_KEYS.RELAY, relayUrl);
+  }, [relayUrl]);
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
@@ -102,7 +108,7 @@ export default function ChatScreen() {
     setStatus("connecting");
     setShowSetup(false);
 
-    const url = `${RELAY_URL}?room=${encodeURIComponent(roomId.trim())}&role=phone&token=${encodeURIComponent(token.trim())}`;
+    const url = `${relayUrl || DEFAULT_RELAY}?room=${encodeURIComponent(roomId.trim())}&role=phone&token=${encodeURIComponent(token.trim())}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -271,6 +277,15 @@ export default function ChatScreen() {
             placeholderTextColor="#525252"
             value={workDir}
             onChangeText={setWorkDir}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={styles.setupInput}
+            placeholder={`Relay URL (default: ${DEFAULT_RELAY})`}
+            placeholderTextColor="#525252"
+            value={relayUrl}
+            onChangeText={setRelayUrl}
             autoCapitalize="none"
             autoCorrect={false}
           />
