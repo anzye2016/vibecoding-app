@@ -29,16 +29,13 @@ msgs = db.execute(
     (session_id,)
 ).fetchall()
 
-total_in = total_out = total_reason = total_cache = 0
+total_in = total_out = 0
 model = variant = ""
 for (r,) in msgs:
     d = json.loads(r)
     tokens = d.get("tokens", {})
-    cache = tokens.get("cache", {})
     total_in += tokens.get("input", 0)
     total_out += tokens.get("output", 0)
-    total_reason += tokens.get("reasoning", 0)
-    total_cache += cache.get("read", 0) + cache.get("write", 0)
     mid = d.get("modelID", "")
     if mid:
         model = mid
@@ -46,15 +43,12 @@ for (r,) in msgs:
         if v:
             variant = v
 
-context = total_in + total_cache
-total = total_in + total_out + total_reason
+total = total_in + total_out
 
 print(json.dumps({
-    "context": context,
+    "in": total_in,
+    "out": total_out,
     "total": total,
-    "input": total_in,
-    "output": total_out,
-    "reasoning": total_reason,
     "model": model,
     "variant": variant,
 }))
