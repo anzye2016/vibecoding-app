@@ -29,6 +29,7 @@ let currentChild = null;
 let ws = null;
 let reconnectTimer = null;
 let lastUserMsg = null;
+let hasOutput = false;
 const sessionCache = new Map();
 
 function wsl(cmd) {
@@ -185,7 +186,7 @@ function connect() {
       reconnectTimer = null;
     }
     if (currentChild !== null) {
-      if (lastUserMsg) send({ type: "user", text: `> ${lastUserMsg}` });
+      if (lastUserMsg && !hasOutput) send({ type: "user", text: `> ${lastUserMsg}` });
       send({ type: "processing" });
     }
   });
@@ -201,7 +202,7 @@ function connect() {
     } else if (msg.type === "load_history") {
       console.log("[client] load_history received, dir:", msg.dir);
       if (currentChild !== null) {
-        if (lastUserMsg) send({ type: "user", text: `> ${lastUserMsg}` });
+        if (lastUserMsg && !hasOutput) send({ type: "user", text: `> ${lastUserMsg}` });
         send({ type: "processing" });
       }
       sendHistory(msg);
@@ -318,6 +319,7 @@ async function handleMessage(msg) {
 
   currentChild = child;
   lastUserMsg = message.trim();
+  hasOutput = false;
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
@@ -404,6 +406,7 @@ function send(obj) {
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify(obj));
   }
+  if (obj.type === "chunk") hasOutput = true;
 }
 
 function scheduleReconnect() {
