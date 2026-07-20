@@ -13,8 +13,11 @@ const configPath = join(__dirname, "..", "config.json");
 const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
 const OPENDCODE_MODE = process.env.OPENDCODE_MODE || "json";
-const OPENDCODE_BIN = process.env.OPENDCODE_BIN || join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
+const OPENDCODE_BIN = process.env.OPENDCODE_BIN || (
+  process.platform === "linux" ? "opencode" : join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe")
+);
 const COMPACT_PYTHON = process.env.COMPACT_PYTHON || config.compactPython || "python";
+const IS_LINUX = process.platform === "linux";
 let TOKEN = process.env.RELAY_TOKEN;
 
 if (!TOKEN && existsSync(tokenFile)) {
@@ -58,6 +61,7 @@ function wsl(cmd) {
 }
 
 function getOpenCode(wslDir) {
+  if (IS_LINUX) return "opencode";
   return wslDir.startsWith("/mnt/") ? "opencode" : (config.opencodeBinWsl || "/usr/local/bin/opencode");
 }
 
@@ -143,6 +147,8 @@ async function listSessions(dir) {
     let raw;
     if (dir.match(/^[A-Za-z]:/)) {
       raw = await runOpenCode(dir, ["session", "list", "--format", "json"]);
+    } else if (IS_LINUX) {
+      raw = await runOpenCode(dir, ["session", "list", "--format", "json"]);
     } else {
       raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
     }
@@ -173,6 +179,8 @@ async function loadHistory(dir, sessionId) {
     const isWin = dir.match(/^[A-Za-z]:/);
     let exportOut;
     if (isWin) {
+      exportOut = await runOpenCode(dir, ["export", sessionId]);
+    } else if (IS_LINUX) {
       exportOut = await runOpenCode(dir, ["export", sessionId]);
     } else {
       const safeDir = dir
@@ -322,6 +330,10 @@ async function handleMessage(msg) {
   }
 
   if (message.trim() === "/compact") {
+    if (IS_LINUX) {
+      send({ type: "error", text: "/compact is not supported on Linux. Run opencode and enter /compact manually." });
+      return;
+    }
     if (!msg.dir || !msg.dir.trim()) {
       send({ type: "error", text: "No working directory configured. Set Work Dir in settings first." });
       return;
@@ -408,6 +420,11 @@ async function handleMessage(msg) {
       send({ type: "error", text: `Directory not found: ${dir}` });
       return;
     }
+  } else if (IS_LINUX) {
+    if (!existsSync(dir)) {
+      send({ type: "error", text: `Directory not found: ${dir}` });
+      return;
+    }
   } else {
     const exists = await dirExists(actualDir);
     if (!exists) {
@@ -460,6 +477,14 @@ async function handleMessage(msg) {
     args.push(runMessage);
     child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running opencode natively in ${dir}: ${message}`);
+  } else if (IS_LINUX) {
+    const args = ["run", ...fmtFlag];
+    if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
+    if (modelFlag) args.push("-m", modelFlag);
+    if (variantFlag) args.push("--variant", variantFlag);
+    args.push(runMessage);
+    child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
+    console.log(`[client] Running opencode in ${dir}: ${message}`);
   } else {
     const escapedDir = actualDir
       .replace(/\\/g, "\\\\")
@@ -512,6 +537,8 @@ async function handleMessage(msg) {
           let out;
           const dbPaths = config.statsDbPaths || [];
           if (isWin) {
+            out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
+          } else if (IS_LINUX) {
             out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
           } else {
             const dbArgs = dbPaths.map(p => `"${p}"`).join(" ");

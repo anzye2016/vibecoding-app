@@ -67,20 +67,32 @@ vibecoding-app/
 
 ## PC 客户端
 
+### Windows
+
 ```powershell
 cd client
 npm install
 node client.js
 ```
 
-环境变量：
+### Linux
+
+```bash
+cd client
+npm install
+node client.js
+```
+
+Linux 上 `OPENDCODE_BIN` 默认为 `opencode`（需在 PATH 中），`statsDbPaths` 使用标准路径如 `/home/YOU/.local/share/opencode/opencode.db`。`/compact` 命令在 Linux 上不可用（依赖 Windows 终端自动化）。
+
+### 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ROOM` | `default` | 房间名，App 端输入相同的即可 |
 | `RELAY_URL` | `config.relayUrl` | 中继地址 |
 | `RELAY_TOKEN` | 从 `.vibecoding-token` 文件读取 | PC 认证令牌 |
-| `OPENDCODE_BIN` | `%APPDATA%\npm\node_modules\opencode-ai\bin\opencode.exe` | opencode 二进制路径 |
+| `OPENDCODE_BIN` | Windows: `%APPDATA%\npm\...\opencode.exe` / Linux: `opencode` | opencode 二进制路径 |
 | `OPENDCODE_MODE` | `json` | 输出模式：`json`（JSON 流式）或 `text`（纯文本） |
 | `COMPACT_PYTHON` | `config.compactPython` | Python 解释器（compact 脚本） |
 | `ALLOWED_DIRS_FILE` | 单文件可替代 config.allowedDirs | 目录白名单文件路径 |
@@ -148,7 +160,7 @@ Register-ScheduledTask -TaskName "vibecoding-client" -Action $action -Trigger $t
 |------|------|
 | `/model provider/model` | 切换模型（只第一轮生效，session 内记住） |
 | `/variant high/minimal/max` | 推理强度（只第一轮生效，session 内记住） |
-| `/compact` | 压缩对话历史（新终端执行，90s 等待） |
+| `/compact` | 压缩对话历史（仅 Windows，新终端执行，90s 等待） |
 | `!!restart` | 重启 PC 客户端 |
 
 ### 历史对话
