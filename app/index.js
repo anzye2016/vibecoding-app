@@ -108,8 +108,8 @@ export default function ChatScreen() {
     setStatus("connecting");
     setShowSetup(false);
 
-    const url = `${relayUrl || DEFAULT_RELAY}?room=${encodeURIComponent(roomId.trim())}&role=phone&token=${encodeURIComponent(token.trim())}`;
-    const ws = new WebSocket(url);
+    const url = `${relayUrl || DEFAULT_RELAY}?room=${encodeURIComponent(roomId.trim())}&role=phone`;
+    const ws = new WebSocket(url, token.trim());
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -271,9 +271,9 @@ function handleSelectSession(msg) {
 }
 
 function connect() {
-  const url = `${RELAY_URL}?room=${encodeURIComponent(ROOM)}&role=pc&token=${encodeURIComponent(TOKEN)}`;
+  const url = `${RELAY_URL}?room=${encodeURIComponent(ROOM)}&role=pc`;
 
-  ws = new WebSocket(url);
+  ws = new WebSocket(url, TOKEN);
 
   ws.on("open", () => {
     console.log(`[client] Connected to relay (room: ${ROOM})`);

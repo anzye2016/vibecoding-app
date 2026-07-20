@@ -76,7 +76,7 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const token = url.searchParams.get("token");
+  const token = (req.headers["sec-websocket-protocol"] || "").split(",")[0].trim();
   const expected = role === "pc" ? PC_TOKEN : PHONE_TOKEN;
   if (!safeCompare(token, expected)) {
     console.log(`[${ts()}] REJECT ${ip} room=${room} role=${role} - auth failed`);
