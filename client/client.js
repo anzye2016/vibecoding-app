@@ -291,6 +291,47 @@ function loadAllowedDirs() {
   ];
 }
 
+async function runSlashCommand(msg) {
+  const dir = msg.dir || process.cwd();
+  const message = msg.msg.trim();
+  const args = message.slice(1).split(/\s+/).filter(Boolean);
+  if (args.length === 0) return;
+  console.log("[client] Slash command:", args.join(" "));
+
+  const isWin = dir.match(/^[A-Za-z]:/);
+  let child;
+  if (isWin) {
+    child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
+  } else {
+    const safeDir = dir
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+    const escapedArgs = args.map(a => a.replace(/"/g, '\\"')).join(" ");
+    child = spawn("wsl", ["-e", "bash", "-c", `cd "${safeDir}" && ${getOpenCode(safeDir)} ${escapedArgs}`], { stdio: ["ignore", "pipe", "pipe"] });
+  }
+
+  currentChild = child;
+  const rlOut = readline.createInterface({ input: child.stdout });
+  const rlErr = readline.createInterface({ input: child.stderr });
+
+  rlOut.on("line", (line) => { send({ type: "chunk", text: stripAnsi(line) + "\n" }); });
+  rlErr.on("line", (line) => { send({ type: "chunk", text: stripAnsi(line) + "\n" }); });
+
+  child.on("close", (code) => {
+    currentChild = null;
+    rlOut.close();
+    rlErr.close();
+    send({ type: "done", code: code || 0 });
+  });
+
+  child.on("error", (err) => {
+    currentChild = null;
+    send({ type: "error", text: `Command failed: ${err.message}` });
+  });
+}
+
 async function handleMessage(msg) {
   const dir = msg.dir || process.cwd();
   const message = msg.msg || "";
@@ -302,6 +343,11 @@ async function handleMessage(msg) {
     send({ type: "chunk", text: "Restarting client...\n" });
     cancelCurrent();
     setTimeout(() => process.exit(0), 200);
+    return;
+  }
+
+  if (/^\//.test(message.trim())) {
+    runSlashCommand(msg);
     return;
   }
 
