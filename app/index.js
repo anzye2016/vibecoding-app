@@ -131,6 +131,8 @@ export default function ChatScreen() {
         } else if (msg.type === "error") {
           setProcessing(false);
           addMessage({ type: "error", text: msg.text });
+        } else if (msg.type === "processing") {
+          setProcessing(true);
         } else if (msg.type === "history") {
           historyLoadedRef.current = true;
           if (msg.rounds && Array.isArray(msg.rounds)) {

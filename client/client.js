@@ -183,6 +183,9 @@ function connect() {
       clearInterval(reconnectTimer);
       reconnectTimer = null;
     }
+    if (currentChild !== null) {
+      send({ type: "processing" });
+    }
   });
 
   ws.on("message", (data) => {
@@ -195,6 +198,9 @@ function connect() {
       cancelCurrent();
     } else if (msg.type === "load_history") {
       console.log("[client] load_history received, dir:", msg.dir);
+      if (currentChild !== null) {
+        send({ type: "processing" });
+      }
       sendHistory(msg);
     }
   });
