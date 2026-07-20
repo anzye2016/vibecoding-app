@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "fs";
+import { readFileSync, existsSync, writeFileSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
