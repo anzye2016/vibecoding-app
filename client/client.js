@@ -445,7 +445,7 @@ async function handleMessage(msg) {
           if (out) {
             const s = JSON.parse(out);
             if (!s.error) {
-              send({ type: "chunk", text: `[tokens] context=${s.context.toLocaleString()} total=${s.total.toLocaleString()}\n` });
+              send({ type: "chunk", text: `[tokens] context=${s.context.toLocaleString()} | total=${s.total.toLocaleString()}${s.model ? " | " + s.model : ""}${s.variant ? " " + s.variant : ""}\n` });
             }
           }
         }

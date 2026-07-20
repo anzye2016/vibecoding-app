@@ -30,6 +30,7 @@ msgs = db.execute(
 ).fetchall()
 
 total_in = total_out = total_reason = total_cache = 0
+model = variant = ""
 for (r,) in msgs:
     d = json.loads(r)
     tokens = d.get("tokens", {})
@@ -38,6 +39,10 @@ for (r,) in msgs:
     total_out += tokens.get("output", 0)
     total_reason += tokens.get("reasoning", 0)
     total_cache += cache.get("read", 0) + cache.get("write", 0)
+    if not model and d.get("modelID"):
+        model = d["providerID"] + "/" + d["modelID"]
+    if not variant:
+        variant = d.get("variant", "")
 
 context = total_in + total_cache
 total = total_in + total_out + total_reason
@@ -48,4 +53,6 @@ print(json.dumps({
     "input": total_in,
     "output": total_out,
     "reasoning": total_reason,
+    "model": model,
+    "variant": variant,
 }))
