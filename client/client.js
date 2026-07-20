@@ -347,7 +347,7 @@ async function handleMessage(msg) {
   let runMessage = message;
   const m = message.match(/^\/model\s+(\S+)/);
   if (m) {
-    modelFlag = m[1].includes("/") ? m[1] : "deepseek/" + m[1];
+    modelFlag = m[1];
     runMessage = message.slice(m[0].length).trim() || "hi";
   }
 
