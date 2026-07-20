@@ -30,7 +30,7 @@ export default function MarkdownBlock({ text }) {
         inCode = false;
         elements.push(
           <View key={elements.length} style={styles.codeBlock}>
-            <Text style={styles.codeText}>{codeLines.join("\n")}</Text>
+            <Text style={styles.codeText} selectable>{codeLines.join("\n")}</Text>
           </View>
         );
       }
