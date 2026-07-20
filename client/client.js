@@ -312,7 +312,7 @@ function loadAllowedDirs() {
 }
 
 async function handleMessage(msg) {
-  const dir = msg.dir || process.cwd();
+  const dir = msg.dir;
   const message = msg.msg || "";
 
   if (!message.trim()) return;
@@ -326,10 +326,15 @@ async function handleMessage(msg) {
   }
 
   if (message.trim() === "/compact") {
-    const cIsWin = dir.match(/^[A-Za-z]:/);
+    if (!msg.dir || !msg.dir.trim()) {
+      send({ type: "error", text: "No working directory configured. Set Work Dir in settings first." });
+      return;
+    }
+    const cDir = msg.dir;
+    const cIsWin = cDir.match(/^[A-Za-z]:/);
     const cActualDir = cIsWin
-      ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/")
-      : dir;
+      ? "/mnt/" + cDir[0].toLowerCase() + cDir.slice(2).replace(/\\/g, "/")
+      : cDir;
 
     const sid = sessionCache.get(cActualDir) || null;
     if (!sid) {
@@ -342,7 +347,7 @@ async function handleMessage(msg) {
       return;
     }
 
-    console.log("[client] /compact on session:", sid);
+    console.log("[client] /compact dir:", cDir, "session:", sid, "mode:", cIsWin ? "win" : "wsl");
     send({ type: "chunk", text: "[compact] Opening terminal...\n" });
 
     const ocBin = cIsWin ? OPENDCODE_BIN : getOpenCode(cActualDir);
@@ -350,7 +355,7 @@ async function handleMessage(msg) {
 
     compactChild = spawn(COMPACT_PYTHON, [
       compactScript,
-      "--dir", cIsWin ? dir : cActualDir,
+      "--dir", cIsWin ? cDir : cActualDir,
       "--session", sid,
       "--mode", cIsWin ? "win" : "wsl",
       "--opencode", ocBin,
