@@ -89,6 +89,25 @@ async function dirExists(wslDir) {
   }
 }
 
+function pipeToPythonStdin(script, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python", [script], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else {
+        console.error("[client] python stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
+    });
+    child.on("error", reject);
+    child.stdin.end(input, "utf8");
+  });
+}
+
 function pipeToPython(script, input) {
   return new Promise((resolve, reject) => {
     const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
@@ -167,7 +186,11 @@ async function loadHistory(dir, sessionId) {
       try { await wsl(`rm -f "${wslTmp}${fname}"`); } catch {}
     }
     if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
-    raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
+    if (isWin) {
+      raw = await pipeToPythonStdin(join(__dirname, "last5.py"), exportOut);
+    } else {
+      raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
+    }
     if (!raw) { console.warn("[client] loadHistory: python returned empty, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
