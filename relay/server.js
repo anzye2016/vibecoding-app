@@ -53,9 +53,9 @@ function ts() {
 }
 
 wss.on("connection", (ws, req) => {
-  const url = new URL(req.url, "http://localhost");
-  const room = url.searchParams.get("room");
-  const role = url.searchParams.get("role");
+  const pathParts = (req.url || "").replace(/^\/+|\/+$/g, "").split("/");
+  const room = pathParts[0] || "";
+  const role = pathParts[1] || "";
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress;
   const origin = req.headers["origin"];
 

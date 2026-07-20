@@ -271,7 +271,7 @@ function handleSelectSession(msg) {
 }
 
 function connect() {
-  const url = `${RELAY_URL}?room=${encodeURIComponent(ROOM)}&role=pc`;
+  const url = `${RELAY_URL}/${encodeURIComponent(ROOM)}/pc`;
 
   ws = new WebSocket(url, TOKEN);
 
