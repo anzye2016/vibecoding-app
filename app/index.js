@@ -451,7 +451,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   inputInner: {
-    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
     color: "#e5e5e5",
