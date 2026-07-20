@@ -432,7 +432,7 @@ function onJsonLine(line) {
         if (typeof inp === "string") cmd = inp;
         else cmd = inp.command || inp.description || "";
       }
-      if (cmd) cmd = cmd.slice(0, 300);
+      if (cmd) cmd = cmd.slice(0, 2000);
       send({ type: "chunk", text: `[${name}] ${cmd}\n` });
     } else if (t === "error") {
       const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
