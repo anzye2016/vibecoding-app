@@ -89,6 +89,24 @@ async function dirExists(wslDir) {
   }
 }
 
+function runPython(script, args = []) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python", [script, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else {
+        console.error("[client] python stderr:", stderr);
+        reject(new Error(`exit ${code}`));
+      }
+    });
+    child.on("error", reject);
+  });
+}
+
 function pipeToPython(script, input) {
   return new Promise((resolve, reject) => {
     const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
@@ -409,11 +427,23 @@ async function handleMessage(msg) {
     rlErr.on("line", onTextLine);
   }
 
-  child.on("close", (code) => {
+  child.on("close", async (code) => {
     currentChild = null;
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
+    if (code === 0) {
+      try {
+        const sid = lastSessionId || await getLastSession(dir);
+        if (sid) {
+          const out = await runPython(join(__dirname, "stats.py"), [sid]);
+          if (out) {
+            const s = JSON.parse(out);
+            send({ type: "chunk", text: `[tokens] context=${s.context.toLocaleString()} total=${s.total.toLocaleString()}\n` });
+          }
+        }
+      } catch {}
+    }
   });
 
   child.on("error", (err) => {
