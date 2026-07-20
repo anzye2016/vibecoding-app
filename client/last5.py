@@ -1,6 +1,7 @@
-import json, sys
+import json, sys, os
 
-raw = sys.stdin.buffer.read().decode("utf-8", errors="replace")
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    raw = f.read()
 d = json.loads(raw)
 msgs = d.get("messages", [])
 

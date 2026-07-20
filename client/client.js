@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { readFileSync, existsSync, writeFileSync } from "fs";
+import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
@@ -34,18 +34,22 @@ const newSessionDirs = new Set();
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
     const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
+    const chunks = [];
     let stderr = "";
-    child.stdout.on("data", (d) => { stdout += d; });
+    let settled = false;
+    child.stdout.on("data", (d) => { chunks.push(d); });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
-      if (code === 0) resolve(stdout.trim());
-      else {
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolve(Buffer.concat(chunks).toString("utf8").trim());
+      } else {
         console.error("[client] wsl stderr:", stderr);
         reject(new Error(`exit ${code}`));
       }
     });
-    child.on("error", reject);
+    child.on("error", (err) => { if (!settled) { settled = true; reject(err); } });
   });
 }
 
@@ -87,21 +91,22 @@ async function dirExists(wslDir) {
 
 function pipeToPython(script, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn("python", [script], { stdio: ["pipe", "pipe", "pipe"] });
+    const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
+    try { writeFileSync(tmpFile, input, "utf8"); } catch (e) { reject(e); return; }
+    const child = spawn("python", [script, tmpFile], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("close", (code) => {
+      try { rmSync(tmpFile); } catch {}
       if (code === 0) resolve(stdout.trim());
       else {
         console.error("[client] python stderr:", stderr);
         reject(new Error(`exit ${code}`));
       }
     });
-    child.on("error", reject);
-    child.stdin.write(input);
-    child.stdin.end();
+    child.on("error", (err) => { try { rmSync(tmpFile); } catch {} reject(err); });
   });
 }
 
@@ -153,7 +158,13 @@ async function loadHistory(dir, sessionId) {
         .replace(/"/g, '\\"')
         .replace(/\$/g, '\\$')
         .replace(/`/g, '\\`');
-      exportOut = await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" 2>/dev/null`);
+      const ts = Date.now();
+      const winTmp = (process.env.TEMP || process.env.TMPDIR || "/tmp").split("\\").join("/");
+      const wslTmp = "/mnt/" + winTmp[0].toLowerCase() + winTmp.slice(2);
+      const fname = `/vibe-export-${ts}.json`;
+      await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" > "${wslTmp}${fname}" 2>/dev/null`);
+      try { exportOut = readFileSync(winTmp + fname, "utf-8"); } catch {}
+      try { await wsl(`rm -f "${wslTmp}${fname}"`); } catch {}
     }
     if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
     raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
