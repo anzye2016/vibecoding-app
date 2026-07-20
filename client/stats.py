@@ -25,7 +25,7 @@ if not db:
     sys.exit(0)
 
 msgs = db.execute(
-    "SELECT data FROM message WHERE session_id=? AND json_extract(data, '$.tokens') IS NOT NULL",
+    "SELECT data FROM message WHERE session_id=? AND json_extract(data, '$.tokens') IS NOT NULL ORDER BY id",
     (session_id,)
 ).fetchall()
 
@@ -39,9 +39,9 @@ for (r,) in msgs:
     total_out += tokens.get("output", 0)
     total_reason += tokens.get("reasoning", 0)
     total_cache += cache.get("read", 0) + cache.get("write", 0)
-    if not model and d.get("modelID"):
-        model = d["providerID"] + "/" + d["modelID"]
-    if not variant:
+    mid = d.get("modelID", "")
+    if mid:
+        model = mid
         variant = d.get("variant", "")
 
 context = total_in + total_cache
