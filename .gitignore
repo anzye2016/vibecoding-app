@@ -4,3 +4,4 @@ android/
 dist/
 *.apk
 *.log
+client/.vibecoding-token

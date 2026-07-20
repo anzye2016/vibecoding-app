@@ -9,6 +9,19 @@ npx expo prebuild --platform android --clean
 cd C:\vibecoding-app\android
 .\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
 
-# 启动PC客户端
+# 启动PC客户端（Token 自动从 client\.vibecoding-token 读取）
 cd C:\vibecoding-app\client
+npm install
 node client.js
+
+# 指定房间
+set ROOM=myroom
+node client.js
+
+# Token 位置：
+#   PC 端:  client\.vibecoding-token（自动读取）
+#   App 端: 首次连接时手动输入
+
+# 杀客户端
+$p = Get-Content "$env:TEMP\vibecoding-client-pid.txt"
+taskkill /PID $p /F
