@@ -254,7 +254,7 @@ export default function ChatScreen() {
         <View style={styles.setupBar}>
           <TextInput
             style={styles.setupInput}
-            placeholder={`Relay URL (default: ${DEFAULT_RELAY})`}
+            placeholder="Relay URL (default: wss://localhost:8766/vibecoding/ws)"
             placeholderTextColor="#525252"
             value={relayUrl}
             onChangeText={setRelayUrl}
