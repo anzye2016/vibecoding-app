@@ -1,9 +1,16 @@
 import { WebSocketServer } from "ws";
 import { timingSafeEqual } from "crypto";
 import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
-const PORT = parseInt(process.env.PORT || "8766", 10);
-const HOST = process.env.HOST || "127.0.0.1";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const configPath = join(__dirname, "..", "config.json");
+const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
+
+const PORT = parseInt(process.env.PORT || config.relayPort || "8766", 10);
+const HOST = process.env.HOST || config.relayHost || "127.0.0.1";
+const ORIGIN = process.env.ORIGIN || config.relayOrigin || "https://localhost";
 const MAX_MSG_SIZE = 65536;
 
 function loadToken(name) {
@@ -62,7 +69,8 @@ wss.on("connection", (ws, req) => {
     ws.close(1008, "unauthorized");
     return;
   }
-  if (origin && !/^https:\/\/wxysyn\.com$/.test(origin)) {
+  const originPattern = new RegExp("^" + ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
+  if (origin && !originPattern.test(origin)) {
     console.log(`[${ts()}] REJECT ${ip} room=${room} - invalid origin=${origin}`);
     ws.close(1008, "unauthorized");
     return;

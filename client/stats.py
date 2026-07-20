@@ -1,12 +1,10 @@
 import sqlite3, json, sys, os
 
 session_id = sys.argv[1]
+paths = sys.argv[2:]
 
-paths = [
-    os.path.expanduser(r"~\.local\share\opencode\opencode.db"),
-    "/home/anzye/.local/share/opencode/opencode.db",
-    "/mnt/c/Users/anzye/.local/share/opencode/opencode.db",
-]
+if not paths:
+    paths = [os.path.expanduser(r"~\.local\share\opencode\opencode.db")]
 
 db = None
 for p in paths:

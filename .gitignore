@@ -5,3 +5,6 @@ dist/
 *.apk
 *.log
 client/.vibecoding-token
+config.json
+快捷命令.txt
+__pycache__/

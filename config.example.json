@@ -1,0 +1,16 @@
+{
+  "relayUrl": "wss://your-domain.com/vibecoding/ws",
+  "relayOrigin": "https://your-domain.com",
+  "relayHost": "127.0.0.1",
+  "relayPort": 8766,
+  "compactPython": "C:\\Users\\YOU\\projects\\screen-agent\\.venv\\Scripts\\python.exe",
+  "opencodeBinWsl": "/home/YOU/.npm-global/bin/opencode",
+  "statsDbPaths": [
+    "/home/YOU/.local/share/opencode/opencode.db",
+    "/mnt/c/Users/YOU/.local/share/opencode/opencode.db"
+  ],
+  "allowedDirs": [
+    "C:/Users/YOU/projects/",
+    "/home/YOU/projects/"
+  ]
+}

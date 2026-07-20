@@ -15,8 +15,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MarkdownBlock from "./components/MarkdownBlock";
+import config from "../config.json";
 
-const RELAY_URL = "wss://wxysyn.com/vibecoding/ws";
+const RELAY_URL = config.relayUrl || "wss://localhost:8766/vibecoding/ws";
 
 const STORAGE_KEYS = {
   TOKEN: "vibecoding_token",
@@ -266,7 +267,7 @@ export default function ChatScreen() {
           />
           <TextInput
             style={styles.setupInput}
-            placeholder="Work dir (e.g. /mnt/c/Users/anzye/projects/cc)"
+              placeholder="Work dir (e.g. /mnt/c/Users/YOU/projects)"
             placeholderTextColor="#525252"
             value={workDir}
             onChangeText={setWorkDir}

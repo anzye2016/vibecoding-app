@@ -1,6 +1,14 @@
-import sys
+import sys, json, os
 
-path = "/etc/nginx/sites-available/wxysyn.com"
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json")
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except Exception:
+    config = {}
+
+domain = config.get("relayOrigin", "https://localhost").replace("https://", "").replace("http://", "")
+path = f"/etc/nginx/sites-available/{domain}"
 
 vibecoding_block = """    # === VibeCoding ===
     location /vibecoding/ws {

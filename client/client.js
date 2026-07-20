@@ -5,14 +5,16 @@ import { fileURLToPath } from "url";
 import readline from "readline";
 import WebSocket from "ws";
 
-const RELAY_URL = process.env.RELAY_URL || "wss://wxysyn.com/vibecoding/ws";
+const RELAY_URL = process.env.RELAY_URL || config.relayUrl || "wss://localhost:8766/vibecoding/ws";
 const ROOM = process.env.ROOM || "default";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const configPath = join(__dirname, "..", "config.json");
+const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
 const tokenFile = process.env.RELAY_TOKEN_FILE || join(__dirname, ".vibecoding-token");
 const OPENDCODE_MODE = process.env.OPENDCODE_MODE || "json";
 const OPENDCODE_BIN = process.env.OPENDCODE_BIN || join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
-const COMPACT_PYTHON = process.env.COMPACT_PYTHON || "C:\\Users\\anzye\\projects\\screen-agent\\.venv\\Scripts\\python.exe";
+const COMPACT_PYTHON = process.env.COMPACT_PYTHON || config.compactPython || "python";
 let TOKEN = process.env.RELAY_TOKEN;
 
 if (!TOKEN && existsSync(tokenFile)) {
@@ -56,7 +58,7 @@ function wsl(cmd) {
 }
 
 function getOpenCode(wslDir) {
-  return wslDir.startsWith("/mnt/") ? "opencode" : "/home/anzye/.npm-global/bin/opencode";
+  return wslDir.startsWith("/mnt/") ? "opencode" : (config.opencodeBinWsl || "/usr/local/bin/opencode");
 }
 
 function stripAnsi(str) {
@@ -302,13 +304,7 @@ function loadAllowedDirs() {
         .filter(l => l && !l.startsWith("#"));
     }
   } catch {}
-  return [
-    "/mnt/c/Users/anzye/projects/",
-    "/home/anzye/projects/",
-    "/mnt/c/vibecoding-app/",
-    "/mnt/c/Users/anzye/scripts/",
-    "/mnt/c/Users/anzye/",
-  ];
+  return config.allowedDirs || [];
 }
 
 async function handleMessage(msg) {
@@ -514,10 +510,12 @@ async function handleMessage(msg) {
         const sid = lastSessionId || await getLastSession(dir);
         if (sid) {
           let out;
+          const dbPaths = config.statsDbPaths || [];
           if (isWin) {
-            out = await runPython(join(__dirname, "stats.py"), [sid]);
+            out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
           } else {
-            out = await wsl(`python3 /mnt/c/vibecoding-app/client/stats.py "${sid}"`);
+            const dbArgs = dbPaths.map(p => `"${p}"`).join(" ");
+            out = await wsl(`python3 /mnt/c/vibecoding-app/client/stats.py "${sid}" ${dbArgs}`);
           }
           if (out) {
             const s = JSON.parse(out);

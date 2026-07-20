@@ -3,30 +3,60 @@
 在手机上继续电脑 opencode 的对话。
 
 ```
-手机 App ←──WSS──→ wxysyn.com:443 (nginx) ──WS──→ 127.0.0.1:8766 (relay) ←──WSS──→ PC 客户端 → opencode
+手机 App ←──WSS──→ your-domain.com:443 (nginx) ──WS──→ 127.0.0.1:8766 (relay) ←──WSS──→ PC 客户端 → opencode
 ```
+
+## 快速开始
+
+1. **复制配置文件**：`cp config.example.json config.json`，修改为自己的设置
+2. **PC 客户端**：见 [PC 客户端](#pc-客户端)
+3. **手机 App**：编译安装，填入 Token / Room ID / Work dir 连接
+4. **中继服务器**：部署 relay，确保 Token 一致
 
 ## 目录结构
 
 ```
-C:\vibecoding-app\
-├── app/              # Expo Android 应用
-│   ├── _layout.js        # 根布局（ErrorBoundary）
-│   ├── index.js          # 聊天 UI（含 Token 输入框）
+vibecoding-app/
+├── config.example.json  # 配置模板（提交git）
+├── config.json          # 实际配置（不提交git，自己创建）
+├── app/                 # Expo Android 应用
+│   ├── _layout.js           # 根布局（ErrorBoundary）
+│   ├── index.js             # 聊天 UI
 │   └── components/
 │       └── MarkdownBlock.js  # 代码块渲染
-├── client/           # Windows PC 客户端
-│   ├── client.js         # WebSocket + opencode 子进程管理
-│   ├── last5.py          # 历史对话导出处理
-│   ├── allowed-dirs.txt  # 目录白名单（支持热修改）
+├── client/              # PC 客户端
+│   ├── client.js            # WebSocket + opencode 子进程管理
+│   ├── compact.py           # 终端自动化（/compact 命令）
+│   ├── stats.py             # Session token 统计
+│   ├── last5.py             # 历史对话导出
 │   └── package.json
-├── relay/            # 首尔中继服务器
-│   ├── server.js         # WebSocket 房间配对转发 + ping/pong keepalive
+├── relay/               # 中继服务器
+│   ├── server.js            # WebSocket 房间配对转发
+│   ├── fix-nginx.py         # Nginx 配置脚本
 │   └── package.json
-├── assets/           # 图标
-├── app.json          # Expo 配置
+├── assets/              # 图标
+├── app.json             # Expo 配置
 └── package.json
 ```
+
+## 配置文件
+
+所有个性化设置集中在 `config.json`（从 `config.example.json` 模板创建）：
+
+```json
+{
+  "relayUrl": "wss://your-domain.com/vibecoding/ws",
+  "relayOrigin": "https://your-domain.com",
+  "relayHost": "127.0.0.1",
+  "relayPort": 8766,
+  "compactPython": "python",
+  "opencodeBinWsl": "/home/YOU/.npm-global/bin/opencode",
+  "statsDbPaths": ["/home/YOU/.local/share/opencode/opencode.db"],
+  "allowedDirs": ["/home/YOU/projects/"]
+}
+```
+
+环境变量可以覆盖配置文件中的值，优先级：环境变量 > config.json。
 
 ## 认证
 
@@ -38,7 +68,7 @@ C:\vibecoding-app\
 ## PC 客户端
 
 ```powershell
-cd C:\vibecoding-app\client
+cd client
 npm install
 node client.js
 ```
@@ -48,19 +78,16 @@ node client.js
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ROOM` | `default` | 房间名，App 端输入相同的即可 |
-| `RELAY_URL` | `wss://wxysyn.com/vibecoding/ws` | 中继地址 |
+| `RELAY_URL` | `config.relayUrl` | 中继地址 |
 | `RELAY_TOKEN` | 从 `.vibecoding-token` 文件读取 | PC 认证令牌 |
 | `OPENDCODE_BIN` | `%APPDATA%\npm\node_modules\opencode-ai\bin\opencode.exe` | opencode 二进制路径 |
 | `OPENDCODE_MODE` | `json` | 输出模式：`json`（JSON 流式）或 `text`（纯文本） |
-| `ALLOWED_DIRS_FILE` | `allowed-dirs.txt` | 目录白名单文件路径 |
-
-### 开机自启
-
-已配置 Windows 计划任务 `vibecoding-client`，开机自启 + 崩溃自动重启。wrapper 脚本在 `~/scripts/vibecoding-client-wrapper.ps1`。
+| `COMPACT_PYTHON` | `config.compactPython` | Python 解释器（compact 脚本） |
+| `ALLOWED_DIRS_FILE` | 单文件可替代 config.allowedDirs | 目录白名单文件路径 |
 
 ### 目录白名单
 
-编辑 `client/allowed-dirs.txt`（一行一个目录，支持 Windows/WSL 格式），修改后立即生效无需重启。
+在 `config.json` 中配置 `allowedDirs` 数组（支持 Windows/WSL 格式，最后不要带 `/`）。也可以用 `ALLOWED_DIRS_FILE` 指向一个文本文件。
 
 ## 输出模式
 
@@ -93,6 +120,15 @@ node client.js
 - 历史消息轮次之间有空行分隔
 - 所有输出文本和用户消息均可长按原生选择和复制
 
+### 特殊命令
+
+| 命令 | 说明 |
+|------|------|
+| `/model provider/model` | 切换模型（只第一轮生效，session 内记住） |
+| `/variant high/minimal/max` | 推理强度（只第一轮生效，session 内记住） |
+| `/compact` | 压缩对话历史（新终端执行，90s 等待） |
+| `!!restart` | 重启 PC 客户端 |
+
 ### 历史对话
 
 - 自动加载最后 10 轮对话
@@ -111,18 +147,22 @@ node client.js
 
 ## 中继服务器
 
-部署在首尔服务器 `43.155.246.153`，systemd 管理，含 30s ping/pong keepalive 和日志限速。
+部署在云服务器，systemd 管理，含 30s ping/pong keepalive 和日志限速。
 
 ```bash
-scp relay/server.js ubuntu@43.155.246.153:/opt/vibecoding-relay/
-ssh ubuntu@43.155.246.153 "sudo systemctl restart vibecoding-relay"
+scp relay/server.js user@your-server:/opt/vibecoding-relay/
+ssh user@your-server "sudo systemctl restart vibecoding-relay"
 ```
+
+部署 relay 后运行 `fix-nginx.py` 添加 Nginx WebSocket 配置（自动读取 config.json 中的域名）。
 
 ## 编译 APK
 
 ```powershell
-cd C:\vibecoding-app\android
+cd android
 .\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
 ```
 
 APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
+
+编译前确认 `config.json` 中 `relayUrl` 已设为你的中继地址（会编译到 APK 中）。
