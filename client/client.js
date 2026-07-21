@@ -51,6 +51,7 @@ if (existsSync(pidFile)) {
 writeFileSync(pidFile, String(process.pid));
 
 let currentChild = null;
+let processingDir = null;
 let compactChild = null;
 let ws = null;
 let reconnectTimer = null;
@@ -306,7 +307,10 @@ function connect() {
       cancelCurrent();
     } else if (msg.type === "load_history") {
       console.log("[client] load_history received, dir:", msg.dir);
-      if (currentChild !== null) {
+      const hDir = msg.dir || "";
+      const hIsWin = hDir.match(/^[A-Za-z]:/);
+      const hKey = hIsWin ? "/mnt/" + hDir[0].toLowerCase() + hDir.slice(2).replace(/\\/g, "/") : hDir;
+      if (currentChild !== null && processingDir === hKey) {
         send({ type: "processing" });
       }
       sendHistory(msg);
@@ -526,6 +530,7 @@ async function handleMessage(msg) {
   }
 
   currentChild = child;
+  processingDir = actualDir;
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
@@ -555,6 +560,7 @@ async function handleMessage(msg) {
 
   child.on("close", async (code) => {
     currentChild = null;
+    processingDir = null;
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
@@ -588,6 +594,7 @@ async function handleMessage(msg) {
 
   child.on("error", (err) => {
     currentChild = null;
+    processingDir = null;
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
   });
 }
