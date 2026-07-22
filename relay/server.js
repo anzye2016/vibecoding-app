@@ -52,7 +52,7 @@ const connLimiter = new Map(); // ip -> [timestamps]
 
 const MSG_LIMIT = 30;     // max messages per window
 const MSG_WINDOW = 10000; // 10s window
-const CONN_LIMIT = 5;     // max connections per window
+const CONN_LIMIT = 20;     // max connections per window
 const CONN_WINDOW = 60000;// 60s window
 
 function checkRate(limiter, key, limit, window) {
