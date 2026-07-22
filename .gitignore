@@ -4,7 +4,16 @@ android/
 dist/
 *.apk
 *.log
+*.pyc
+*.swp
+*~
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.vscode/
+.idea/
+__pycache__/
 client/.vibecoding-token
 config.json
 快捷命令.txt
-__pycache__/
