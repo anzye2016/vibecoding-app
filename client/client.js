@@ -60,7 +60,7 @@ const newSessionDirs = new Set();
 
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
-    const child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("wsl", ["-e", "bash", "--noprofile", "--norc", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     const chunks = [];
     let stderr = "";
     let settled = false;
@@ -527,7 +527,7 @@ async function handleMessage(msg) {
       .replace(/`/g, '\\`');
     const inner = `cd "${escapedDir}" && ${getOpenCode(escapedDir)} run${useJson ? " --format json" : ""} ${sessionArg}${modelFlag ? ` -m "${modelFlag}"` : ""}${variantFlag ? ` --variant "${variantFlag}"` : ""} "${escapedMsg}"`;
     const cmd = `script -q -c ${JSON.stringify(inner)} /dev/null`;
-    child = spawn("wsl", ["-e", "bash", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    child = spawn("wsl", ["-e", "bash", "--noprofile", "--norc", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
   }
 
@@ -628,7 +628,7 @@ function onJsonLine(line) {
       send({ type: "chunk", text: `[error] ${err}\n` });
     }
   } catch {
-    send({ type: "chunk", text: raw + "\n" });
+    // non-JSON line (WSL noise), drop silently
   }
 }
 
