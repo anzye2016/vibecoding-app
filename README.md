@@ -1,58 +1,60 @@
 # VibeCoding
 
-在手机上继续电脑 opencode 的对话。
+**中文** — 在手机上继续电脑 opencode 的对话。  
+**English** — Continue opencode conversations from your phone.
 
 ```
-手机 App ←──WSS──→ your-domain.com:443 (nginx) ──WS──→ 127.0.0.1:8766 (relay) ←──WSS──→ PC 客户端 → opencode
+Phone App ←──WSS──→ your-domain.com:443 (nginx) ──WS──→ 127.0.0.1:8766 (relay) ←──WSS──→ PC Client → opencode
 ```
 
-## 快速开始
+---
 
-1. **复制配置文件**：`cp config.example.json config.json`，修改为自己的路径
-2. **部署中继服务器** → Token 和 systemd 配置 → 启动
-3. **运行 PC 客户端** → 连接 relay
-4. **编译安装 App** → 填写连接信息
+## Quick Start / 快速开始
 
-## 目录结构
+1. **Copy config**: `cp config.example.json config.json`, edit with your paths
+2. **Deploy relay** → set tokens and systemd → start
+3. **Run PC client** → connect to relay
+4. **Build and install App** → fill in connection info
+
+---
+
+## Directory Structure / 目录结构
 
 ```
 vibecoding-app/
-├── config.example.json  # 配置模板（提交 git）
-├── config.json          # 实际配置（不提交，自己从模板创建）
-├── app/                 # Expo Android 应用
-│   ├── _layout.js
-│   ├── index.js
-│   └── components/MarkdownBlock.js
-├── client/              # PC 客户端（Windows / Linux）
+├── config.example.json       # config template (committed)
+├── config.json               # actual config (gitignored, create from template)
+├── app/                      # Expo Android app
+├── client/                   # PC client (Windows / Linux)
 │   ├── client.js
-│   ├── compact.py       # Windows 终端自动化
+│   ├── compact.py            # Windows terminal automation
 │   ├── stats.py
-│   ├── last5.py
-│   └── package.json
-├── relay/               # 中继服务器
+│   └── last5.py
+├── relay/                    # relay server
 │   ├── server.js
 │   ├── fix-nginx.py
 │   └── package.json
-├── scripts/             # 部署辅助
+├── scripts/
 │   └── vibecoding-client-wrapper.ps1
 └── assets/
 ```
 
-## 中继服务器
+---
 
-部署在云服务器上，systemd 管理。
+## Relay Server / 中继服务器
 
-### 1. 准备 Token
+Deploy on a cloud server, managed by systemd.
+
+### Tokens / Token
 
 ```bash
-# 生成两个 64 位十六进制 token
-openssl rand -hex 32  # PC 用
-openssl rand -hex 32  # Phone 用
+openssl rand -hex 32  # for PC
+openssl rand -hex 32  # for Phone
 ```
 
-### 2. 创建 systemd service
+### systemd Service
 
-`/etc/systemd/system/vibecoding-relay.service`：
+`/etc/systemd/system/vibecoding-relay.service`:
 
 ```ini
 [Unit]
@@ -66,7 +68,6 @@ WorkingDirectory=/opt/vibecoding-relay
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
 Environment=HOST=127.0.0.1
 Environment=PORT=8766
 Environment=ORIGIN=https://your-domain.com
@@ -77,7 +78,7 @@ Environment=PHONE_TOKEN=your_phone_token_here
 WantedBy=multi-user.target
 ```
 
-### 3. 部署
+### Deploy / 部署
 
 ```bash
 scp relay/package.json relay/server.js user@your-server:/opt/vibecoding-relay/
@@ -86,11 +87,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now vibecoding-relay
 ```
 
-### 4. Nginx 反向代理
+### Nginx Reverse Proxy
 
-已配置 nginx 证书后，运行 `relay/fix-nginx.py` 自动注入 WebSocket 代理配置（读取 config.json 中的域名）。
-
-手动配置等效于：
+After SSL is configured, run `relay/fix-nginx.py` (reads domain from config.json). Manual equivalent:
 
 ```nginx
 location /vibecoding/ws {
@@ -107,22 +106,22 @@ location /vibecoding/ws {
 }
 ```
 
-## 认证机制
+---
 
-Token 通过 WebSocket 子协议（`Sec-WebSocket-Protocol` header）传输，不经过 URL。
+## Authentication / 认证机制
 
-| 角色 | Token 来源 |
-|------|-----------|
-| PC 端 | `RELAY_TOKEN` 环境变量 或 `client/.vibecoding-token` 文件 |
-| Phone 端 | App 设置页手动输入（AsyncStorage 自动保存） |
+Tokens are sent via WebSocket subprotocol (`Sec-WebSocket-Protocol`), not in the URL.
 
-连接 URL 格式（不含 Token）：
+| Role | Token Source |
+|------|-------------|
+| PC | `RELAY_TOKEN` env var or `client/.vibecoding-token` file |
+| Phone | Manual input in app settings (saved to AsyncStorage) |
 
-```
-wss://your-domain.com/vibecoding/ws/{room}/{role}
-```
+Connection URL (no token in URL): `wss://your-domain.com/vibecoding/ws/{room}/{role}`
 
-## 配置文件
+---
+
+## Config File / 配置文件
 
 ```json
 {
@@ -137,11 +136,13 @@ wss://your-domain.com/vibecoding/ws/{room}/{role}
 }
 ```
 
-环境变量优先于 config.json。
+Environment variables override config.json.
 
-## PC 客户端
+---
 
-### 安装运行
+## PC Client / PC 客户端
+
+### Install & Run
 
 ```bash
 cd client
@@ -149,22 +150,22 @@ npm install
 node client.js
 ```
 
-### 环境变量
+### Environment Variables / 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `ROOM` | `default` | 房间名 |
-| `RELAY_URL` | `config.relayUrl` | 中继地址 |
-| `RELAY_TOKEN` | 读 `.vibecoding-token` 文件 | PC 认证 token |
-| `OPENDCODE_BIN` | 自动检测 | opencode 可执行文件路径 |
-| `OPENDCODE_MODE` | `json` | 输出格式 |
-| `COMPACT_PYTHON` | `config.compactPython` | Python 解释器 |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROOM` | `default` | Room name |
+| `RELAY_URL` | `config.relayUrl` | Relay address |
+| `RELAY_TOKEN` | reads `.vibecoding-token` | PC auth token |
+| `OPENDCODE_BIN` | auto-detected | opencode binary path |
+| `OPENDCODE_MODE` | `json` | Output format |
+| `COMPACT_PYTHON` | `config.compactPython` | Python interpreter |
 
-### 目录白名单
+### Directory Whitelist / 目录白名单
 
-在 `config.json` 中配置 `allowedDirs`，支持 Windows / WSL / Linux 路径。
+Configure `allowedDirs` in config.json. Supports Windows, WSL, and Linux paths.
 
-### 开机自启（Windows）
+### Auto-start (Windows) / 开机自启
 
 ```powershell
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
@@ -174,15 +175,30 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName "vibecoding-client" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest
 ```
 
-守护脚本支持崩溃指数退避（5s → 10s → ... → max 60s）。
+The wrapper uses exponential backoff on crashes (5s → max 60s).
 
-### Linux 说明
+### Linux Notes / Linux 说明
 
-Linux 上直接运行，opencode 需在 PATH 中。`/compact` 命令不可用（依赖 Windows 终端自动化）。
+Runs directly. opencode must be in PATH. `/compact` is unavailable (requires Windows terminal automation).
+
+### Commands / 特殊命令
+
+| Command | Description |
+|---------|-------------|
+| `/model provider/model` | Switch model |
+| `/variant high/minimal/max` | Reasoning effort |
+| `/compact` | Compact conversation (Windows only) |
+| `!!restart` | Restart PC client |
+
+### Stats Display / Token 统计
+
+After each response, the client shows: `c=ctx o=out r=reasoning` and model name.
+
+---
 
 ## App
 
-### 编译
+### Build / 编译
 
 ```powershell
 cd C:\vibecoding-app
@@ -191,34 +207,33 @@ cd android
 .\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
 ```
 
-APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
+APK: `android/app/build/outputs/apk/release/app-release.apk`
 
-### 连接
+### Connect / 连接
 
-设置页填入：Relay URL / Token / Room ID / Work dir。所有值自动保存，无需重新编译即可更换服务器。
+Fill in Relay URL / Token / Room ID / Work Dir in settings. All values auto-save. No recompilation needed to switch servers.
 
-### 特殊命令
+### Display / 显示
 
-| 命令 | 说明 |
-|------|------|
-| `/model provider/model` | 切换模型 |
-| `/variant high/minimal/max` | 推理强度 |
-| `/compact` | 压缩对话（仅 Windows） |
-| `!!restart` | 重启 PC 客户端 |
+- Monospace text + code blocks (dark background, blue left border)
+- `Thinking...` spinner while processing
+- Auto-loads last 10 conversation rounds on first connect
+- Long-press to select and copy text
 
-### 显示
+---
 
-- opencode 输出：纯文本（等宽） + 代码块（深色背景蓝色左边框）
-- 处理中显示 `Thinking...` 旋转动画
-- 首次连接自动加载最近 10 轮历史
-- 所有文本长按可复制
+## Security / 安全
 
-## 安全
+| Measure | Detail |
+|---------|--------|
+| Transport | WSS (TLS) end-to-end |
+| Relay bind | 127.0.0.1 only |
+| Role isolation | Separate PC/Phone tokens |
+| Token compare | `timingSafeEqual` against timing attacks |
+| Dir whitelist | Restricts accessible paths |
 
-| 措施 | 详情 |
-|------|------|
-| 传输加密 | WSS（TLS）全链路 |
-| Relay 监听 | 仅 127.0.0.1 |
-| 角色隔离 | PC / Phone 独立 Token |
-| Token 验证 | `timingSafeEqual` 防时序攻击 |
-| 目录白名单 | 限制可访问路径 |
+---
+
+## License
+
+Apache-2.0
