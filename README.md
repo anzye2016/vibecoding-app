@@ -24,8 +24,16 @@ vibecoding-app/
 ├── client/                   # PC client (Windows / Linux)
 ├── relay/                    # relay server
 ├── scripts/                  # deployment helpers
-└── assets/
+├── assets/                   # icons, screenshots
+└── LICENSE
 ```
+
+## Screenshots / 截图
+
+<p align="center">
+  <img src="assets/screenshot1.jpg" width="300" alt="VibeCoding App">
+  <img src="assets/screenshot2.jpg" width="300" alt="VibeCoding App">
+</p>
 
 ## Relay Server / 中继服务器
 
