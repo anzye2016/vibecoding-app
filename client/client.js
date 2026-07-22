@@ -123,7 +123,8 @@ async function dirExists(wslDir) {
 function runPython(script, args = []) {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const child = spawn("python", [script, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const pyBin = IS_LINUX ? "python3" : "python";
+    const child = spawn(pyBin, [script, ...args], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
@@ -146,7 +147,8 @@ function pipeToPython(script, input) {
     let settled = false;
     const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
     try { writeFileSync(tmpFile, input, "utf8"); } catch (e) { reject(e); return; }
-    const child = spawn("python", [script, tmpFile], { stdio: ["ignore", "pipe", "pipe"] });
+    const pyBin = IS_LINUX ? "python3" : "python";
+    const child = spawn(pyBin, [script, tmpFile], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
@@ -634,7 +636,8 @@ function cancelCurrent() {
   if (currentChild) {
     try {
       if (IS_LINUX) {
-        process.kill(-currentChild.pid, "SIGKILL");
+        process.kill(currentChild.pid, "SIGTERM");
+        setTimeout(() => { process.kill(currentChild.pid, "SIGKILL"); }, 3000).unref();
       } else {
         spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
       }
@@ -645,7 +648,8 @@ function cancelCurrent() {
   if (compactChild) {
     try {
       if (IS_LINUX) {
-        process.kill(-compactChild.pid, "SIGKILL");
+        process.kill(compactChild.pid, "SIGTERM");
+        setTimeout(() => { process.kill(compactChild.pid, "SIGKILL"); }, 3000).unref();
       } else {
         spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
       }
