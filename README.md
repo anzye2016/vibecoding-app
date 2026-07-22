@@ -234,6 +234,18 @@ Fill in Relay URL / Token / Room ID / Work Dir in settings. All values auto-save
 
 ---
 
-## License
+## Security Considerations / 安全说明
+
+| Risk | Mitigation / Warning |
+|------|---------------------|
+| **Token stored in plaintext on disk** | PC: `client/.vibecoding-token` file. Phone: AsyncStorage (plaintext). Keep your device secure, no auto-rotation. |
+| **No rate limiting on relay** | ⚠️ Added default limits (30 msg/10s per room, 5 conn/min per IP). Tune in relay code if needed. |
+| **No certificate pinning** | App trusts system CAs. Ensure your relay uses a valid TLS certificate. |
+| **Relay sees all messages** | TLS terminates at nginx, relay sees plaintext. Run relay on trusted infrastructure only. |
+| **Directory whitelist enforced client-side** | A modified client can bypass this. Server-side enforcement not supported. |
+
+**Disclaimer / 免责声明**: This project is provided as-is, without any warranty. You are responsible for securing your own relay server, tokens, and devices. The authors are not liable for any misuse or data breaches.
+
+## License / 开源许可
 
 Apache-2.0

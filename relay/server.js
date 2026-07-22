@@ -46,6 +46,31 @@ function safeCompare(a, b) {
 
 const rooms = new Map();
 
+// Rate limiters
+const msgLimiter = new Map();  // room -> [timestamps]
+const connLimiter = new Map(); // ip -> [timestamps]
+
+const MSG_LIMIT = 30;     // max messages per window
+const MSG_WINDOW = 10000; // 10s window
+const CONN_LIMIT = 5;     // max connections per window
+const CONN_WINDOW = 60000;// 60s window
+
+function checkRate(limiter, key, limit, window) {
+  const now = Date.now();
+  let timestamps = limiter.get(key);
+  if (!timestamps) {
+    timestamps = [];
+    limiter.set(key, timestamps);
+  }
+  // Remove old entries
+  while (timestamps.length && timestamps[0] < now - window) {
+    timestamps.shift();
+  }
+  if (timestamps.length >= limit) return false;
+  timestamps.push(now);
+  return true;
+}
+
 const wss = new WebSocketServer({ host: HOST, port: PORT, maxPayload: MAX_MSG_SIZE });
 
 function ts() {
@@ -53,10 +78,15 @@ function ts() {
 }
 
 wss.on("connection", (ws, req) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress;
+  if (!checkRate(connLimiter, ip, CONN_LIMIT, CONN_WINDOW)) {
+    console.log(`[${ts()}] REJECT ${ip} - connection rate limited`);
+    ws.close(1008, "rate limited");
+    return;
+  }
   const pathParts = (req.url || "").replace(/^\/+|\/+$/g, "").split("/");
   const room = pathParts[0] || "";
   const role = pathParts[1] || "";
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress;
   const origin = req.headers["origin"];
 
   if (!room || !/^[a-zA-Z0-9_-]{1,32}$/.test(room)) {
@@ -145,6 +175,10 @@ wss.on("connection", (ws, req) => {
   ws.on("message", (data) => {
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
+    if (!checkRate(msgLimiter, room, MSG_LIMIT, MSG_WINDOW)) {
+      console.log(`[${ts()}] REJECT room=${room} role=${role} - message rate limited`);
+      return;
+    }
     pair.lastActivity = Date.now();
 
     if (role === "phone") {
