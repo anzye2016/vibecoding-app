@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
 import { timingSafeEqual } from "crypto";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -12,6 +12,16 @@ const PORT = parseInt(process.env.PORT || config.relayPort || "8766", 10);
 const HOST = process.env.HOST || config.relayHost || "127.0.0.1";
 const ORIGIN = process.env.ORIGIN || config.relayOrigin || "https://localhost";
 const MAX_MSG_SIZE = 65536;
+const LOG_FILE = "/var/log/relay/relay.log";
+
+function logReject(ip, reason) {
+  try {
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+  } catch {}
+  try {
+    appendFileSync(LOG_FILE, `${new Date().toISOString()} REJECT ip=${ip} reason=${reason}\n`);
+  } catch {}
+}
 
 function loadToken(name) {
   const env = process.env[name];
@@ -81,6 +91,7 @@ wss.on("connection", (ws, req) => {
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress;
   if (!checkRate(connLimiter, ip, CONN_LIMIT, CONN_WINDOW)) {
     console.log(`[${ts()}] REJECT ${ip} - connection rate limited`);
+    logReject(ip, "rate_limited");
     ws.close(1008, "rate limited");
     return;
   }
@@ -91,17 +102,20 @@ wss.on("connection", (ws, req) => {
 
   if (!room || !/^[a-zA-Z0-9_-]{1,32}$/.test(room)) {
     console.log(`[${ts()}] REJECT ${ip} - invalid room`);
+    logReject(ip, "invalid_room");
     ws.close(1008, "unauthorized");
     return;
   }
   if (!role || !["pc", "phone"].includes(role)) {
     console.log(`[${ts()}] REJECT ${ip} room=${room} - invalid role`);
+    logReject(ip, "invalid_role room=" + room);
     ws.close(1008, "unauthorized");
     return;
   }
   const originPattern = new RegExp("^" + ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
   if (origin && !originPattern.test(origin)) {
     console.log(`[${ts()}] REJECT ${ip} room=${room} - invalid origin=${origin}`);
+    logReject(ip, "invalid_origin room=" + room + " origin=" + origin);
     ws.close(1008, "unauthorized");
     return;
   }
@@ -110,6 +124,7 @@ wss.on("connection", (ws, req) => {
   const expected = role === "pc" ? PC_TOKEN : PHONE_TOKEN;
   if (!safeCompare(token, expected)) {
     console.log(`[${ts()}] REJECT ${ip} room=${room} role=${role} - auth failed`);
+    logReject(ip, "auth_failed room=" + room + " role=" + role);
     ws.close(1008, "unauthorized");
     return;
   }
@@ -177,6 +192,7 @@ wss.on("connection", (ws, req) => {
     try { msg = JSON.parse(data); } catch { return; }
     if (!checkRate(msgLimiter, room, MSG_LIMIT, MSG_WINDOW)) {
       console.log(`[${ts()}] REJECT room=${room} role=${role} - message rate limited`);
+      logReject(ip, "msg_rate_limited room=" + room);
       return;
     }
     pair.lastActivity = Date.now();
