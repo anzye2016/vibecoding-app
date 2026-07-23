@@ -203,15 +203,12 @@ export default function ChatScreen() {
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
       if (msg.type === "status" && (msg.text === "--- Connected ---" || msg.text === "--- PC online ---")) {
-        // Clear stale failure messages
-        const filtered = prev.filter(m =>
+        // Clear stale failure messages, don't add the success banner itself
+        return prev.filter(m =>
           !(m.type === "error" && m.text === "Connection failed") &&
           !(m.type === "status" && m.text === "--- Disconnected ---") &&
           !(m.type === "status" && m.text === "--- PC offline ---")
         );
-        // Show PC online banner but suppress the empty Connected banner
-        if (msg.text === "--- PC online ---") return [...filtered, msg];
-        return filtered;
       }
       // Dedup consecutive "--- Disconnected ---"
       if (msg.type === "status" && msg.text === "--- Disconnected ---") {
