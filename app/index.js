@@ -17,6 +17,59 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MarkdownBlock from "./components/MarkdownBlock";
 
+function tryParseQuestion(text) {
+  if (!text) return null;
+  const idx = text.indexOf("[question]");
+  if (idx === -1) return null;
+  const after = text.slice(idx + "[question]".length).trim();
+  const start = after.indexOf("{");
+  const end = after.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const data = JSON.parse(after.slice(start, end + 1));
+    return { data, before: text.slice(0, idx).trim() };
+  } catch {
+    return null;
+  }
+}
+
+function QuestionBlock({ questionData, beforeText, onAnswer }) {
+  const [answered, setAnswered] = useState(false);
+
+  const handleAnswer = (label) => {
+    if (answered) return;
+    setAnswered(true);
+    onAnswer(label);
+  };
+
+  return (
+    <View style={styles.questionContainer}>
+      {beforeText ? <MarkdownBlock text={beforeText} /> : null}
+      {questionData.questions.map((q, qi) => {
+        const options = Array.isArray(q.options) ? q.options : [];
+        return (
+          <View key={qi} style={styles.questionGroup}>
+            {q.header ? <Text style={styles.questionHeader}>{q.header}</Text> : null}
+            {q.question ? <Text style={styles.questionText}>{q.question}</Text> : null}
+            {options.map((opt, oi) => (
+              <TouchableOpacity
+                key={oi}
+                style={[styles.optionBtn, answered && styles.optionBtnUsed]}
+                onPress={() => handleAnswer(opt.label)}
+                activeOpacity={0.7}
+                disabled={answered}
+              >
+                <Text style={styles.optionLabel}>{opt.label}</Text>
+                {opt.description ? <Text style={styles.optionDesc}>{opt.description}</Text> : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const STORAGE_KEYS = {
   TOKEN: "vibecoding_token",
   ROOM: "vibecoding_room",
@@ -269,6 +322,14 @@ export default function ChatScreen() {
     }
   };
 
+  const answerQuestion = useCallback((answer) => {
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: answer }));
+      addMessage({ type: "user", text: `> ${answer}` });
+      setProcessing(true);
+    }
+  }, [workDir]);
+
   const selectSession = (sessionId, title) => {
     setShowSessionPicker(false);
     if (wsRef.current && wsRef.current.readyState === 1) {
@@ -402,6 +463,11 @@ export default function ChatScreen() {
             );
           }
           if (msg.type === "chunk" || msg.type === "history-assistant") {
+            const parsed = tryParseQuestion(msg.text);
+            const questions = parsed && Array.isArray(parsed.data.questions) ? parsed.data.questions : null;
+            if (questions && questions.length > 0) {
+              return <QuestionBlock key={i} questionData={parsed.data} beforeText={parsed.before} onAnswer={answerQuestion} />;
+            }
             return <MarkdownBlock key={i} text={msg.text} />;
           }
           if (msg.type === "spacer") {
@@ -715,5 +781,46 @@ const styles = StyleSheet.create({
     color: "#525252",
     fontSize: 12,
     marginTop: 4,
+  },
+  questionContainer: {
+    marginVertical: 8,
+  },
+  questionGroup: {
+    gap: 4,
+  },
+  questionHeader: {
+    color: "#facc15",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  questionText: {
+    color: "#e5e5e5",
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  optionBtn: {
+    backgroundColor: "#1a1a2e",
+    borderWidth: 1,
+    borderColor: "#2a2a4a",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 6,
+  },
+  optionBtnUsed: {
+    opacity: 0.5,
+  },
+  optionLabel: {
+    color: "#93c5fd",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  optionDesc: {
+    color: "#a3a3a3",
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 17,
   },
 });
