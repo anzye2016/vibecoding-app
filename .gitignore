@@ -16,4 +16,5 @@ Thumbs.db
 __pycache__/
 client/.vibecoding-token
 config.json
+lib/send-feishu.js
 快捷命令.txt

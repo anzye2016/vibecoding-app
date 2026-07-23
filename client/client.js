@@ -58,8 +58,16 @@ let reconnectTimer = null;
 let retryCount = 0;
 let disconnectGraceTimer = null;
 let protectedChild = null;
+let disconnectedSince = null;
+let feishuNotified = false;
 const sessionCache = new Map();
 const newSessionDirs = new Set();
+
+let sendFeishuText = null;
+const feishuPath = new URL("../lib/send-feishu.js", import.meta.url).pathname;
+if (existsSync(feishuPath)) {
+  import("../lib/send-feishu.js").then((m) => { sendFeishuText = m.sendFeishuText; }).catch(() => {});
+}
 
 function getReconnectDelay() {
   if (retryCount < 10) return 5000;
@@ -88,6 +96,10 @@ function cancelGraceIfAlive() {
 
 function reconnect() {
   if (reconnectTimer) return;
+  if (disconnectedSince && !feishuNotified && Date.now() - disconnectedSince >= 300000) {
+    feishuNotified = true;
+    if (sendFeishuText) sendFeishuText("⚠️ VibeCoding client has been disconnected from relay for over 5 minutes.");
+  }
   const delay = getReconnectDelay();
   retryCount++;
   console.log(`[client] Reconnecting in ${delay}ms (retry ${retryCount})`);
@@ -330,6 +342,8 @@ function connect() {
   ws.on("open", () => {
     console.log(`[client] Connected to relay (room: ${ROOM})`);
     retryCount = 0;
+    disconnectedSince = null;
+    feishuNotified = false;
     cancelGraceIfAlive();
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
@@ -370,12 +384,14 @@ function connect() {
 
   ws.on("close", () => {
     console.log("[client] Disconnected");
+    if (!disconnectedSince) disconnectedSince = Date.now();
     cancelAfterGrace();
     reconnect();
   });
 
   ws.on("error", (err) => {
     console.error("[client] WebSocket error:", err.message);
+    if (!disconnectedSince) disconnectedSince = Date.now();
     cancelAfterGrace();
     reconnect();
   });
