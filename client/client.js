@@ -294,6 +294,8 @@ function connect() {
       clearInterval(reconnectTimer);
       reconnectTimer = null;
     }
+    // TCP keepalive: detect half-open connections caused by NAT timeouts
+    try { ws._socket?.setKeepAlive(true, 15000); } catch {}
     if (currentChild !== null) {
       send({ type: "processing" });
     }
@@ -333,6 +335,8 @@ function connect() {
 
   ws.on("error", (err) => {
     console.error("[client] WebSocket error:", err.message);
+    cancelCurrent();
+    scheduleReconnect();
   });
 }
 

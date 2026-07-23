@@ -42,6 +42,8 @@ export default function ChatScreen() {
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
   const historyLoadedRef = useRef(false);
+  const intentionalDisconnect = useRef(false);
+  const reconnectTimeout = useRef(null);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
@@ -103,7 +105,7 @@ export default function ChatScreen() {
 
   const connect = () => {
     if (!roomId.trim() || !token.trim()) return;
-
+    const isManual = intentionalDisconnect.current;
     disconnect();
     setStatus("connecting");
     setShowSetup(false);
@@ -114,9 +116,20 @@ export default function ChatScreen() {
 
     ws.onopen = () => {
       setStatus("connected");
-      setMessages([]);
-      historyLoadedRef.current = false;
-      addMessage({ type: "status", text: "--- Connected ---" });
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+      if (!isManual && historyLoadedRef.current) {
+        // Auto-reconnect: preserve messages
+        addMessage({ type: "status", text: "--- Connected ---" });
+      } else {
+        // Manual connect or first launch: fresh state
+        setMessages([]);
+        historyLoadedRef.current = false;
+        intentionalDisconnect.current = false;
+        addMessage({ type: "status", text: "--- Connected ---" });
+      }
     };
 
     ws.onmessage = (e) => {
@@ -177,6 +190,9 @@ export default function ChatScreen() {
       setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
+      if (!intentionalDisconnect.current) {
+        reconnectTimeout.current = setTimeout(() => connect(), 1000);
+      }
     };
 
     ws.onerror = () => {
@@ -185,10 +201,18 @@ export default function ChatScreen() {
       setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
+      if (!intentionalDisconnect.current) {
+        reconnectTimeout.current = setTimeout(() => connect(), 1000);
+      }
     };
   };
 
   const disconnect = () => {
+    intentionalDisconnect.current = true;
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
