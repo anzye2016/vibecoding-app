@@ -101,6 +101,13 @@ export default function ChatScreen() {
   const reconnectTimer = useRef(null);
   const appStateReady = useRef(false);
   const connIntent = useRef({ auto: false, restoreProcessing: false });
+  const retryCount = useRef(0);
+
+  const getReconnectDelay = () => {
+    const n = retryCount.current;
+    if (n < 10) return 1000;
+    return Math.min(1000 * Math.pow(2, n - 10), 30000);
+  };
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -208,6 +215,7 @@ export default function ChatScreen() {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      retryCount.current = 0;
       setStatus("connected");
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
@@ -229,7 +237,9 @@ export default function ChatScreen() {
       setStatus("disconnected");
       addMessage({ type: "status", text: "--- Disconnected ---" });
       if (!intentionalDisconnect.current && AppState.currentState === "active") {
-        reconnectTimer.current = setTimeout(connect, 1000);
+        const delay = getReconnectDelay();
+        retryCount.current++;
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
 
@@ -239,7 +249,9 @@ export default function ChatScreen() {
       setStatus("disconnected");
       addMessage({ type: "error", text: "Connection failed" });
       if (!intentionalDisconnect.current && AppState.currentState === "active") {
-        reconnectTimer.current = setTimeout(connect, 1000);
+        const delay = getReconnectDelay();
+        retryCount.current++;
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
 
@@ -298,6 +310,7 @@ export default function ChatScreen() {
   connectRef.current = connect;
 
   const disconnect = () => {
+    retryCount.current = 0;
     intentionalDisconnect.current = true;
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
