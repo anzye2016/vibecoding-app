@@ -636,6 +636,9 @@ function onJsonLine(line) {
 
     if (t === "text") {
       send({ type: "chunk", text: (p.text || "") + "\n" });
+      if (p.text && /\[question\]/.test(p.text)) {
+        send({ type: "done", code: 0 });
+      }
     } else if (t === "reasoning") {
       send({ type: "chunk", text: (p.text || "") + "\n" });
     } else if (t === "tool_use") {
