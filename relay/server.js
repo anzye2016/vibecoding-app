@@ -214,8 +214,8 @@ wss.on("connection", (ws, req) => {
       if (pair.phone && pair.phone.readyState === 1) {
         pair.phone.send(JSON.stringify(msg));
       } else {
-        // Phone offline → buffer (max 100, drop oldest to keep newest)
-        if (pair.phoneBuffer.length >= 100) pair.phoneBuffer.shift();
+        // Phone offline → buffer (max 500, drop oldest to keep newest)
+        if (pair.phoneBuffer.length >= 500) pair.phoneBuffer.shift();
         pair.phoneBuffer.push(msg);
       }
     }
