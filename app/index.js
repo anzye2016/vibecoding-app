@@ -11,6 +11,7 @@ import {
   Keyboard,
   Modal,
   FlatList,
+  AppState,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,7 +44,17 @@ export default function ChatScreen() {
   const [spinner, setSpinner] = useState(0);
   const historyLoadedRef = useRef(false);
   const intentionalDisconnect = useRef(false);
-  const reconnectTimeout = useRef(null);
+  const pendingReconnect = useRef(false);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && pendingReconnect.current && !intentionalDisconnect.current) {
+        pendingReconnect.current = false;
+        connect();
+      }
+    });
+    return () => sub.remove();
+  }, []);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
@@ -116,10 +127,6 @@ export default function ChatScreen() {
 
     ws.onopen = () => {
       setStatus("connected");
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-        reconnectTimeout.current = null;
-      }
       if (!isManual && historyLoadedRef.current) {
         // Auto-reconnect: preserve messages
         addMessage({ type: "status", text: "--- Connected ---" });
@@ -191,7 +198,7 @@ export default function ChatScreen() {
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
       if (!intentionalDisconnect.current) {
-        reconnectTimeout.current = setTimeout(() => connect(), 1000);
+        pendingReconnect.current = true;
       }
     };
 
@@ -202,17 +209,14 @@ export default function ChatScreen() {
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
       if (!intentionalDisconnect.current) {
-        reconnectTimeout.current = setTimeout(() => connect(), 1000);
+        pendingReconnect.current = true;
       }
     };
   };
 
   const disconnect = () => {
     intentionalDisconnect.current = true;
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
-      reconnectTimeout.current = null;
-    }
+    pendingReconnect.current = false;
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
