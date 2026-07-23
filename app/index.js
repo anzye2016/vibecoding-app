@@ -128,6 +128,7 @@ export default function ChatScreen() {
   const connect = () => {
     if (!roomId.trim() || !token.trim()) return;
     const isManual = intentionalDisconnect.current;
+    const wasProcessing = processing;
     disconnect();
     setStatus("connecting");
     setShowSetup(false);
@@ -143,7 +144,8 @@ export default function ChatScreen() {
         reconnectTimer.current = null;
       }
       if (!isManual && historyLoadedRef.current) {
-        // Auto-reconnect: preserve messages
+        // Auto-reconnect: preserve messages, restore processing state
+        if (wasProcessing) setProcessing(true);
         intentionalDisconnect.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
@@ -210,7 +212,7 @@ export default function ChatScreen() {
     ws.onclose = () => {
       if (wsRef.current !== ws) return;
       setStatus("disconnected");
-      setProcessing(false);
+      if (intentionalDisconnect.current) setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
       if (!intentionalDisconnect.current && AppState.currentState === "active") {
@@ -221,7 +223,7 @@ export default function ChatScreen() {
     ws.onerror = () => {
       if (wsRef.current !== ws) return;
       setStatus("disconnected");
-      setProcessing(false);
+      if (intentionalDisconnect.current) setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
       if (!intentionalDisconnect.current && AppState.currentState === "active") {
