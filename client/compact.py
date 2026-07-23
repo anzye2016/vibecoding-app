@@ -45,22 +45,25 @@ def find_window(title):
     return _found_hwnd
 
 
-def focus_window(hwnd):
+def focus_window(hwnd, retries=3):
     if not hwnd:
         return False
-    fg = user32.GetForegroundWindow()
-    fg_tid = user32.GetWindowThreadProcessId(fg, None)
-    our_tid = user32.GetWindowThreadProcessId(hwnd, None)
-    if fg_tid != our_tid:
-        user32.AttachThreadInput(our_tid, fg_tid, True)
-    user32.BringWindowToTop(hwnd)
-    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-    user32.AllowSetForegroundWindow(-1)
-    user32.SetForegroundWindow(hwnd)
-    if fg_tid != our_tid:
-        user32.AttachThreadInput(our_tid, fg_tid, False)
-    time.sleep(0.3)
-    return user32.GetForegroundWindow() == hwnd
+    for _ in range(retries):
+        fg = user32.GetForegroundWindow()
+        fg_tid = user32.GetWindowThreadProcessId(fg, None)
+        our_tid = user32.GetWindowThreadProcessId(hwnd, None)
+        if fg_tid != our_tid:
+            user32.AttachThreadInput(our_tid, fg_tid, True)
+        user32.BringWindowToTop(hwnd)
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.AllowSetForegroundWindow(-1)
+        user32.SetForegroundWindow(hwnd)
+        if fg_tid != our_tid:
+            user32.AttachThreadInput(our_tid, fg_tid, False)
+        time.sleep(0.3)
+        if user32.GetForegroundWindow() == hwnd:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -142,13 +145,15 @@ def main():
     hwnd = 0
 
     try:
-        # 1. Launch via cmd start -> works for both conhost and Windows Terminal
+        # 1. Launch terminal
         title_cmd = f"$Host.UI.RawUI.WindowTitle='{unique_id}'"
-        cmd = f'start "" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "{title_cmd}"'
+        if args.mode == "wsl":
+            cmd = f'start "" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "{title_cmd}; wsl"'
+        else:
+            cmd = f'start "" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "{title_cmd}"'
         subprocess.Popen(
             cmd,
             shell=True,
-            cwd=args.dir,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -173,13 +178,10 @@ def main():
             print("[compact] Warning: initial focus failed", file=sys.stderr)
         time.sleep(0.5)
 
-        # 4. Enter WSL if needed
-        if args.mode == "wsl":
-            print("[compact] Entering WSL...", file=sys.stderr)
-            type_line("wsl")
-            time.sleep(1.0)
-            focus_window(hwnd)
-            time.sleep(0.3)
+        # 4. cd (belt-and-suspenders: terminal may not start in target dir)
+        focus_window(hwnd)
+        type_line(f'cd "{args.dir}"')
+        time.sleep(0.5)
 
         # 5. opencode
         oc_cmd = f"{args.opencode} -s {args.session}"
