@@ -148,6 +148,7 @@ def main():
         subprocess.Popen(
             cmd,
             shell=True,
+            cwd=args.dir,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -180,32 +181,26 @@ def main():
             focus_window(hwnd)
             time.sleep(0.3)
 
-        # 5. cd
-        print(f"[compact] cd {args.dir}", file=sys.stderr)
-        focus_window(hwnd)
-        type_line(f'cd "{args.dir}"')
-        time.sleep(0.5)
-
-        # 6. opencode
+        # 5. opencode
         oc_cmd = f"{args.opencode} -s {args.session}"
         print(f"[compact] {oc_cmd}", file=sys.stderr)
         focus_window(hwnd)
         type_line(oc_cmd)
 
-        # 7. Wait for opencode TUI
+        # 6. Wait for opencode TUI
         print(f"[compact] Wait {args.startup_wait}s for opencode...", file=sys.stderr)
         time.sleep(args.startup_wait)
 
-        # 8. /compact
+        # 7. /compact
         print("[compact] Sending /compact", file=sys.stderr)
         focus_window(hwnd)
         type_line("/compact")
 
-        # 9. Wait
+        # 8. Wait
         print(f"[compact] Wait {args.compact_wait}s...", file=sys.stderr)
         time.sleep(args.compact_wait)
 
-        # 10. Close gracefully
+        # 9. Close gracefully
         print("[compact] Closing terminal", file=sys.stderr)
         close_terminal(hwnd, args.mode)
 
