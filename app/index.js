@@ -45,12 +45,13 @@ export default function ChatScreen() {
   const historyLoadedRef = useRef(false);
   const intentionalDisconnect = useRef(false);
   const pendingReconnect = useRef(false);
+  const connectRef = useRef(null);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active" && pendingReconnect.current && !intentionalDisconnect.current) {
         pendingReconnect.current = false;
-        connect();
+        connectRef.current?.();
       }
     });
     return () => sub.remove();
@@ -198,7 +199,11 @@ export default function ChatScreen() {
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
       if (!intentionalDisconnect.current) {
-        pendingReconnect.current = true;
+        if (AppState.currentState === "active") {
+          setTimeout(() => connect(), 1000);
+        } else {
+          pendingReconnect.current = true;
+        }
       }
     };
 
@@ -209,10 +214,15 @@ export default function ChatScreen() {
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
       if (!intentionalDisconnect.current) {
-        pendingReconnect.current = true;
+        if (AppState.currentState === "active") {
+          setTimeout(() => connect(), 1000);
+        } else {
+          pendingReconnect.current = true;
+        }
       }
     };
   };
+  connectRef.current = connect;
 
   const disconnect = () => {
     intentionalDisconnect.current = true;
