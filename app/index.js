@@ -110,6 +110,13 @@ export default function ChatScreen() {
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
+      if (msg.type === "status" && (msg.text === "--- Connected ---" || msg.text === "--- PC online ---")) {
+        // Clear stale failure messages on successful reconnect
+        return [...prev.filter(m =>
+          !(m.type === "error" && m.text === "Connection failed") &&
+          !(m.type === "status" && m.text === "--- Disconnected ---")
+        ), msg];
+      }
       const last = prev[prev.length - 1];
       if (msg.type === "chunk" && last && last.type === "chunk") {
         return [...prev.slice(0, -1), { ...last, text: last.text + msg.text }];
