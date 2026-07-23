@@ -44,15 +44,14 @@ export default function ChatScreen() {
   const [spinner, setSpinner] = useState(0);
   const historyLoadedRef = useRef(false);
   const intentionalDisconnect = useRef(false);
-  const pendingReconnect = useRef(false);
   const connectRef = useRef(null);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active" && pendingReconnect.current && !intentionalDisconnect.current) {
-        pendingReconnect.current = false;
-        connectRef.current?.();
-      }
+      if (state !== "active") return;
+      if (intentionalDisconnect.current) return;
+      if (wsRef.current?.readyState === 1) return;
+      connectRef.current?.();
     });
     return () => sub.remove();
   }, []);
@@ -198,12 +197,8 @@ export default function ChatScreen() {
       setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "status", text: "--- Disconnected ---" });
-      if (!intentionalDisconnect.current) {
-        if (AppState.currentState === "active") {
-          setTimeout(() => connect(), 1000);
-        } else {
-          pendingReconnect.current = true;
-        }
+      if (!intentionalDisconnect.current && AppState.currentState === "active") {
+        setTimeout(() => connect(), 1000);
       }
     };
 
@@ -213,12 +208,8 @@ export default function ChatScreen() {
       setProcessing(false);
       wsRef.current = null;
       addMessage({ type: "error", text: "Connection failed" });
-      if (!intentionalDisconnect.current) {
-        if (AppState.currentState === "active") {
-          setTimeout(() => connect(), 1000);
-        } else {
-          pendingReconnect.current = true;
-        }
+      if (!intentionalDisconnect.current && AppState.currentState === "active") {
+        setTimeout(() => connect(), 1000);
       }
     };
   };
@@ -226,7 +217,6 @@ export default function ChatScreen() {
 
   const disconnect = () => {
     intentionalDisconnect.current = true;
-    pendingReconnect.current = false;
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
