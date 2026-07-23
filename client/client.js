@@ -55,8 +55,47 @@ let processingDir = null;
 let compactChild = null;
 let ws = null;
 let reconnectTimer = null;
+let retryCount = 0;
+let disconnectGraceTimer = null;
+let protectedChild = null;
 const sessionCache = new Map();
 const newSessionDirs = new Set();
+
+function getReconnectDelay() {
+  if (retryCount < 10) return 5000;
+  return Math.min(5000 * Math.pow(2, retryCount - 10), 300000);
+}
+
+function cancelAfterGrace() {
+  if (disconnectGraceTimer) return;
+  protectedChild = currentChild;
+  disconnectGraceTimer = setTimeout(() => {
+    disconnectGraceTimer = null;
+    if (protectedChild && currentChild === protectedChild) {
+      cancelCurrent();
+    }
+    protectedChild = null;
+  }, 10000);
+}
+
+function cancelGraceIfAlive() {
+  if (disconnectGraceTimer) {
+    clearTimeout(disconnectGraceTimer);
+    disconnectGraceTimer = null;
+    protectedChild = null;
+  }
+}
+
+function reconnect() {
+  if (reconnectTimer) return;
+  const delay = getReconnectDelay();
+  retryCount++;
+  console.log(`[client] Reconnecting in ${delay}ms (retry ${retryCount})`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, delay);
+}
 
 function wsl(cmd) {
   return new Promise((resolve, reject) => {
@@ -290,8 +329,10 @@ function connect() {
 
   ws.on("open", () => {
     console.log(`[client] Connected to relay (room: ${ROOM})`);
+    retryCount = 0;
+    cancelGraceIfAlive();
     if (reconnectTimer) {
-      clearInterval(reconnectTimer);
+      clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
     // TCP keepalive: detect half-open connections caused by NAT timeouts
@@ -328,15 +369,15 @@ function connect() {
   });
 
   ws.on("close", () => {
-    console.log("[client] Disconnected, reconnecting in 5s...");
-    cancelCurrent();
-    scheduleReconnect();
+    console.log("[client] Disconnected");
+    cancelAfterGrace();
+    reconnect();
   });
 
   ws.on("error", (err) => {
     console.error("[client] WebSocket error:", err.message);
-    cancelCurrent();
-    scheduleReconnect();
+    cancelAfterGrace();
+    reconnect();
   });
 }
 
@@ -705,14 +746,6 @@ function send(obj) {
   }
 }
 
-function scheduleReconnect() {
-  if (reconnectTimer) return;
-  reconnectTimer = setInterval(() => {
-    if (ws && ws.readyState === 1) return;
-    connect();
-  }, 5000);
-}
-
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
@@ -721,7 +754,8 @@ stdinRl.on("SIGINT", shutdown);
 
 function shutdown() {
   cancelCurrent();
-  if (reconnectTimer) clearInterval(reconnectTimer);
+  if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   if (ws) ws.close();
   process.exit(0);
 }
@@ -729,6 +763,8 @@ function shutdown() {
 process.on("uncaughtException", (err) => {
   console.error("[client] Uncaught:", err.message);
   cancelCurrent();
+  if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   if (ws) ws.close();
   process.exit(1);
 });
