@@ -506,6 +506,23 @@ async function handleMessage(msg) {
 
   const useJson = OPENDCODE_MODE === "json";
   const fmtFlag = useJson ? ["--format", "json"] : [];
+
+  // Kill any previous running task before starting a new one
+  if (currentChild) {
+    try {
+      if (IS_LINUX) {
+        process.kill(-currentChild.pid, "SIGTERM");
+        setTimeout(() => { try { process.kill(-currentChild.pid, "SIGKILL"); } catch {} }, 5000);
+      } else {
+        spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
+      }
+    } catch (e) {
+      console.error("[client] kill previous child failed:", e.message);
+    }
+    currentChild = null;
+    processingDir = null;
+  }
+
   let child;
   if (isWin) {
     const args = ["run", ...fmtFlag];
@@ -568,6 +585,7 @@ async function handleMessage(msg) {
   }
 
   child.on("close", async (code) => {
+    if (currentChild !== child) return;
     currentChild = null;
     processingDir = null;
     rlOut.close();
@@ -602,6 +620,7 @@ async function handleMessage(msg) {
   });
 
   child.on("error", (err) => {
+    if (currentChild !== child) return;
     currentChild = null;
     processingDir = null;
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
