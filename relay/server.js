@@ -130,7 +130,7 @@ wss.on("connection", (ws, req) => {
   }
 
   if (!rooms.has(room)) {
-    rooms.set(room, { pc: null, phone: null, lastActivity: Date.now() });
+    rooms.set(room, { pc: null, phone: null, lastActivity: Date.now(), phoneBuffer: [] });
   }
   const pair = rooms.get(room);
 
@@ -173,19 +173,25 @@ wss.on("connection", (ws, req) => {
     pair.lastActivity = Date.now();
     console.log(`[${ts()}] CONNECT ${ip} room=${room} role=pc`);
     notifyPhone(room, { type: "status", online: true });
-  } else {
-    if (pair.phone) {
-      try { pair.phone.close(1000, "replaced"); } catch {}
-    }
-    pair.phone = ws;
-    pair.lastActivity = Date.now();
-    console.log(`[${ts()}] CONNECT ${ip} room=${room} role=phone`);
-    if (pair.pc && pair.pc.readyState === 1) {
-      ws.send(JSON.stringify({ type: "status", online: true }));
     } else {
-      ws.send(JSON.stringify({ type: "status", online: false }));
+      if (pair.phone) {
+        try { pair.phone.close(1000, "replaced"); } catch {}
+      }
+      pair.phone = ws;
+      pair.lastActivity = Date.now();
+      console.log(`[${ts()}] CONNECT ${ip} room=${room} role=phone`);
+      if (pair.pc && pair.pc.readyState === 1) {
+        ws.send(JSON.stringify({ type: "status", online: true }));
+      } else {
+        ws.send(JSON.stringify({ type: "status", online: false }));
+      }
+      // Flush buffered messages (from PC → phone while phone was offline)
+      const buf = pair.phoneBuffer;
+      pair.phoneBuffer = [];
+      for (const m of buf) {
+        try { ws.send(JSON.stringify(m)); } catch {}
+      }
     }
-  }
 
   ws.on("message", (data) => {
     let msg;
@@ -207,6 +213,9 @@ wss.on("connection", (ws, req) => {
     } else if (role === "pc") {
       if (pair.phone && pair.phone.readyState === 1) {
         pair.phone.send(JSON.stringify(msg));
+      } else if (pair.phoneBuffer.length < 100) {
+        // Phone offline → buffer (max 100 to prevent OOM)
+        pair.phoneBuffer.push(msg);
       }
     }
   });
