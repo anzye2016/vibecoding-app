@@ -720,6 +720,7 @@ function cancelCurrent() {
       console.error("[client] kill currentChild failed:", e.message);
     }
     currentChild = null;
+    processingDir = null;
     send({ type: "cancelled" });
   }
   if (compactChild) {
