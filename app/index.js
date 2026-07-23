@@ -100,6 +100,7 @@ export default function ChatScreen() {
   const connectRef = useRef(null);
   const reconnectTimer = useRef(null);
   const appStateReady = useRef(false);
+  const connIntent = useRef({ auto: false, restoreProcessing: false });
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -178,11 +179,27 @@ export default function ChatScreen() {
     });
   }, []);
 
+  /* ---- connection lifecycle ---- */
+
   const connect = () => {
     if (!roomId.trim() || !token.trim()) return;
-    const isManual = intentionalDisconnect.current;
-    const wasProcessing = processing;
-    disconnect();
+
+    // Capture intent before any side effects
+    const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
+    connIntent.current = { auto: isReconnect, restoreProcessing: isReconnect && processing };
+
+    // Cleanup old connection; suppress its onclose from spawning a new timer
+    intentionalDisconnect.current = true;
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    intentionalDisconnect.current = false;
+
     setStatus("connecting");
     setShowSetup(false);
 
@@ -196,17 +213,33 @@ export default function ChatScreen() {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      if (!isManual && historyLoadedRef.current) {
-        // Auto-reconnect: preserve messages, restore processing state
-        if (wasProcessing) setProcessing(true);
-        intentionalDisconnect.current = false;
+      if (connIntent.current.auto) {
+        if (connIntent.current.restoreProcessing) setProcessing(true);
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
-        // Manual connect or first launch: fresh state
         setMessages([]);
         historyLoadedRef.current = false;
-        intentionalDisconnect.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
+      }
+    };
+
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+      wsRef.current = null;
+      setStatus("disconnected");
+      addMessage({ type: "status", text: "--- Disconnected ---" });
+      if (!intentionalDisconnect.current && AppState.currentState === "active") {
+        reconnectTimer.current = setTimeout(connect, 1000);
+      }
+    };
+
+    ws.onerror = () => {
+      if (wsRef.current !== ws) return;
+      wsRef.current = null;
+      setStatus("disconnected");
+      addMessage({ type: "error", text: "Connection failed" });
+      if (!intentionalDisconnect.current && AppState.currentState === "active") {
+        reconnectTimer.current = setTimeout(connect, 1000);
       }
     };
 
@@ -259,28 +292,6 @@ export default function ChatScreen() {
         }
       } catch (err) {
         console.warn("[ws] parse error:", err.message);
-      }
-    };
-
-    ws.onclose = () => {
-      if (wsRef.current !== ws) return;
-      setStatus("disconnected");
-      if (intentionalDisconnect.current) setProcessing(false);
-      wsRef.current = null;
-      addMessage({ type: "status", text: "--- Disconnected ---" });
-      if (!intentionalDisconnect.current && AppState.currentState === "active") {
-        reconnectTimer.current = setTimeout(() => connect(), 1000);
-      }
-    };
-
-    ws.onerror = () => {
-      if (wsRef.current !== ws) return;
-      setStatus("disconnected");
-      if (intentionalDisconnect.current) setProcessing(false);
-      wsRef.current = null;
-      addMessage({ type: "error", text: "Connection failed" });
-      if (!intentionalDisconnect.current && AppState.currentState === "active") {
-        reconnectTimer.current = setTimeout(() => connect(), 1000);
       }
     };
   };
