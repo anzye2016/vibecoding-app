@@ -27,7 +27,7 @@ function TableBlock({ rows }) {
         <View style={styles.tableRow}>
           {header.map((h, ci) => (
             <View key={ci} style={[styles.tableCell, styles.tableHeader, { width: colWidths[ci] }]}>
-              <Text style={styles.tableHeaderText} numberOfLines={1}>{h}</Text>
+              <Text style={styles.tableHeaderText} selectable numberOfLines={1}>{h}</Text>
             </View>
           ))}
         </View>
@@ -35,7 +35,7 @@ function TableBlock({ rows }) {
           <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
             {row.map((cell, ci) => (
               <View key={ci} style={[styles.tableCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableCellText}>{cell}</Text>
+                <Text style={styles.tableCellText} selectable>{cell}</Text>
               </View>
             ))}
           </View>
