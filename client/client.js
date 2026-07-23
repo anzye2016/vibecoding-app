@@ -646,25 +646,34 @@ function cancelCurrent() {
   if (currentChild) {
     try {
       if (IS_LINUX) {
-        process.kill(currentChild.pid, "SIGTERM");
-        setTimeout(() => { process.kill(currentChild.pid, "SIGKILL"); }, 3000).unref();
+        process.kill(-currentChild.pid, "SIGTERM");
+        setTimeout(() => {
+          try { process.kill(-currentChild.pid, "SIGKILL"); } catch {}
+        }, 5000);
       } else {
         spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[client] kill currentChild failed:", e.message);
+    }
     currentChild = null;
     send({ type: "cancelled" });
   }
   if (compactChild) {
     try {
       if (IS_LINUX) {
-        process.kill(compactChild.pid, "SIGTERM");
-        setTimeout(() => { process.kill(compactChild.pid, "SIGKILL"); }, 3000).unref();
+        process.kill(-compactChild.pid, "SIGTERM");
+        setTimeout(() => {
+          try { process.kill(-compactChild.pid, "SIGKILL"); } catch {}
+        }, 5000);
       } else {
         spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[client] kill compactChild failed:", e.message);
+    }
     compactChild = null;
+    send({ type: "cancelled" });
   }
 }
 
