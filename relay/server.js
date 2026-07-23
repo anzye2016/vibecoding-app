@@ -213,8 +213,9 @@ wss.on("connection", (ws, req) => {
     } else if (role === "pc") {
       if (pair.phone && pair.phone.readyState === 1) {
         pair.phone.send(JSON.stringify(msg));
-      } else if (pair.phoneBuffer.length < 100) {
-        // Phone offline → buffer (max 100 to prevent OOM)
+      } else {
+        // Phone offline → buffer (max 100, drop oldest to keep newest)
+        if (pair.phoneBuffer.length >= 100) pair.phoneBuffer.shift();
         pair.phoneBuffer.push(msg);
       }
     }
