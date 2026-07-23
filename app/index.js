@@ -135,6 +135,7 @@ export default function ChatScreen() {
   const pendingQueue = useRef([]);
 
   const doSend = (text) => {
+    if (!wsRef.current || wsRef.current.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: text }));
     addMessage({ type: "user", text: `> ${text}` });
     setProcessing(true);
