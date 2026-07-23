@@ -46,9 +46,11 @@ export default function ChatScreen() {
   const intentionalDisconnect = useRef(false);
   const connectRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const appStateReady = useRef(false);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
+      if (!appStateReady.current) { appStateReady.current = true; return; }
       if (state !== "active") return;
       if (intentionalDisconnect.current) return;
       if (wsRef.current?.readyState === 1) return;
@@ -56,6 +58,7 @@ export default function ChatScreen() {
     });
     return () => sub.remove();
   }, []);
+
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
