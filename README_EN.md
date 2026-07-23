@@ -217,17 +217,20 @@ Fill in Relay URL / Token / Room ID / Work Dir in settings. All values auto-save
 
 ## Security & Disclaimer
 
-⚠️ **This project is provided as-is, without any warranty.**
+⚠️ **This project is provided as-is, without any warranty. Use at your own risk.**
 
 | Risk | Note |
 |------|------|
+| **opencode has no sandbox** | 🔴 opencode runs with your user privileges and **can read/write any file on disk**. The directory whitelist only restricts which project you can select in the VibeCoding app — opencode itself has no sandbox. Erroneous operations or malicious prompts may cause data loss or system damage. |
 | Token stored in plaintext | PC: `client/.vibecoding-token` file. Phone: AsyncStorage. Keep your device secure. |
-| No certificate pinning | App trusts system CAs. Ensure your relay uses a valid TLS certificate. |
-| Relay sees plaintext messages | TLS terminates at nginx. Run relay on trusted infrastructure only. |
+| No certificate pinning | App trusts system CAs. If a malicious CA is installed on your device, traffic could be intercepted. |
+| Relay sees plaintext messages | TLS terminates at nginx. Relay has access to all conversation content. Run on trusted infrastructure. |
 | Client-side whitelist only | A modified client can bypass it. No server-side enforcement. |
-| No token rotation | Lost token = lost access. Back up manually. |
+| No token rotation | Tokens are permanent until manually replaced. |
 
-**You are responsible for**: securing your own relay, tokens, and devices. The authors are not liable for any misuse or data breaches.
+**You are responsible for**: securing your own relay, tokens, and devices, as well as any consequences of opencode's file system operations. The authors are not liable for any misuse, data breaches, or file corruption.
+
+**Legal use**: This software is intended solely for legitimate software development and programming assistance. Users must not employ it for any illegal purpose, including but not limited to generating malicious code, unauthorized system intrusion, or intellectual property infringement. Violators bear full legal responsibility.
 
 Third-party dependencies (npm, pip, Expo, React Native) are subject to their own licenses.
 
