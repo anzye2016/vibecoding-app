@@ -559,6 +559,9 @@ async function handleMessage(msg) {
         return;
       }
       send({ type: "chunk", text: text + "\n" });
+      if (/^\[question\]/.test(text)) {
+        send({ type: "done", code: 0 });
+      }
     };
     rlOut.on("line", onTextLine);
     rlErr.on("line", onTextLine);
@@ -627,6 +630,9 @@ function onJsonLine(line) {
       }
       if (cmd) cmd = cmd.slice(0, 2000);
       send({ type: "chunk", text: `[${name}] ${cmd}\n` });
+      if (name === "question") {
+        send({ type: "done", code: 0 });
+      }
     } else if (t === "error") {
       const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
       send({ type: "chunk", text: `[error] ${err}\n` });
