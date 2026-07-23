@@ -17,7 +17,7 @@ function TableBlock({ rows }) {
   const colWidths = header.map((_, ci) => {
     const all = rows.map(r => (r[ci] || "").length);
     const maxLen = Math.max(...all, 1);
-    return Math.max(80, Math.min(maxLen * 9, 200));
+    return Math.max(80, Math.min(maxLen * 9, 250));
   });
   const totalWidth = colWidths.reduce((a, b) => a + b, 0) + colCount;
 
@@ -35,7 +35,7 @@ function TableBlock({ rows }) {
           <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
             {row.map((cell, ci) => (
               <View key={ci} style={[styles.tableCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableCellText} numberOfLines={2}>{cell}</Text>
+                <Text style={styles.tableCellText}>{cell}</Text>
               </View>
             ))}
           </View>
@@ -161,14 +161,14 @@ const styles = StyleSheet.create({
   },
   tableHeaderText: {
     color: "#93c5fd",
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "600",
     fontFamily: "monospace",
   },
   tableCellText: {
     color: "#d4d4d4",
-    fontSize: 13,
+    fontSize: 15,
+    lineHeight: 22,
     fontFamily: "monospace",
-    lineHeight: 19,
   },
 });
