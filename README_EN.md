@@ -36,7 +36,7 @@ vibecoding-app/
 
 ## Relay Server
 
-Deploy on a cloud server, managed by systemd.
+Deploy on a cloud server, managed by systemd. Supports offline message buffering (up to 100 PC→phone messages cached while phone is disconnected, flushed on reconnect).
 
 ### Generate Tokens
 
@@ -167,6 +167,14 @@ The wrapper uses exponential backoff on crashes (5s → max 60s).
 
 Runs directly. opencode must be in PATH. `/compact` is unavailable (requires Windows terminal automation).
 
+### Reconnect
+
+The client uses TCP keepalive (15s interval) to detect half-open connections. Combined with relay message buffering:
+
+- **Foreground disconnect**: Auto-reconnects within 1s, preserves chat history.
+- **Background/lock disconnect**: Auto-reconnects immediately on return to foreground.
+- **Manual Disconnect**: Does NOT auto-reconnect. Tap Connect to resume.
+
 ### Commands
 
 | Command | Description |
@@ -213,6 +221,7 @@ Fill in Relay URL / Token / Room ID / Work Dir in settings. All values auto-save
 | Role isolation | Separate PC/Phone tokens |
 | Token compare | `timingSafeEqual` against timing attacks |
 | Rate limiting | 30 msg/10s per room, 20 conn/min per IP |
+| Msg buffer | Relay buffers up to 100 PC→phone messages when phone is offline |
 | Dir whitelist | Restricts accessible paths |
 
 ## Security & Disclaimer

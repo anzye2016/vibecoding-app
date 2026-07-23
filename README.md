@@ -36,7 +36,7 @@ vibecoding-app/
 
 ## 中继服务器
 
-部署在云服务器，systemd 管理。
+部署在云服务器，systemd 管理。支持离线消息缓存（手机断线时自动缓冲最多 100 条，重连后补发）。
 
 ### 生成 Token
 
@@ -167,6 +167,14 @@ Register-ScheduledTask -TaskName "vibecoding-client" -Action $action -Trigger $t
 
 直接运行，opencode 需在 PATH 中。`/compact` 命令不可用（依赖 Windows 终端自动化）。
 
+### 网络恢复
+
+客户端启用 TCP keepalive（15s）检测半开连接，配合 relay 消息缓存实现：
+
+- 前台断线：1 秒内自动重连，保留当前对话
+- 锁屏/后台断线：回到前台立即自动重连，保留对话
+- 手动 Disconnect：不会自动重连，需重新点 Connect
+
 ### 特殊命令
 
 | 命令 | 说明 |
@@ -213,6 +221,7 @@ APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
 | 角色隔离 | PC / Phone 独立 Token |
 | Token 验证 | `timingSafeEqual` 防时序攻击 |
 | 速率限制 | 每房间 30 条/10s，每 IP 20 次连接/分钟 |
+| 消息缓存 | 手机离线时 relay 缓存 PC→phone 消息（最多 100 条），重连后补发 |
 | 目录白名单 | 限制可访问路径 |
 
 ## 安全说明与免责
