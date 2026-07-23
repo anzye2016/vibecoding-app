@@ -129,6 +129,7 @@ export default function ChatScreen() {
       setStatus("connected");
       if (!isManual && historyLoadedRef.current) {
         // Auto-reconnect: preserve messages
+        intentionalDisconnect.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
         // Manual connect or first launch: fresh state
