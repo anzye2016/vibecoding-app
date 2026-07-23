@@ -39,7 +39,6 @@ if (existsSync(pidFile)) {
       if (process.platform === "win32") {
         console.log(`[client] Killing stale instance PID ${oldPid}`);
         spawn("taskkill", ["/PID", String(oldPid), "/F"]);
-        setTimeout(() => {}, 1000);
       } else {
         try { process.kill(oldPid, 0); } catch { /* not alive */ }
         console.log(`[client] Killing stale instance PID ${oldPid}`);

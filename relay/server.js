@@ -173,7 +173,7 @@ wss.on("connection", (ws, req) => {
     pair.lastActivity = Date.now();
     console.log(`[${ts()}] CONNECT ${ip} room=${room} role=pc`);
     notifyPhone(room, { type: "status", online: true });
-    } else {
+  } else {
       if (pair.phone) {
         try { pair.phone.close(1000, "replaced"); } catch {}
       }
