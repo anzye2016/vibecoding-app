@@ -131,6 +131,29 @@ export default function ChatScreen() {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [sessionLabel, setSessionLabel] = useState("(auto)");
+  const [pendingCount, setPendingCount] = useState(0);
+  const pendingQueue = useRef([]);
+
+  const doSend = (text) => {
+    wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: text }));
+    addMessage({ type: "user", text: `> ${text}` });
+    setProcessing(true);
+  };
+
+  const enqueue = (text) => {
+    pendingQueue.current.push(text);
+    setPendingCount(pendingQueue.current.length);
+  };
+
+  const flushQueue = () => {
+    const q = pendingQueue.current;
+    if (q.length === 0) return;
+    pendingQueue.current = [];
+    setPendingCount(0);
+    for (const text of q) {
+      doSend(text);
+    }
+  };
 
   const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 
@@ -241,6 +264,7 @@ export default function ChatScreen() {
         historyLoadedRef.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
       }
+      flushQueue();
     };
 
     ws.onclose = () => {
@@ -317,6 +341,11 @@ export default function ChatScreen() {
   const disconnect = () => {
     retryCount.current = 0;
     intentionalDisconnect.current = true;
+    if (pendingQueue.current.length > 0) {
+      pendingQueue.current = [];
+      setPendingCount(0);
+      addMessage({ type: "status", text: "--- Pending messages cancelled ---" });
+    }
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
@@ -331,17 +360,13 @@ export default function ChatScreen() {
 
   const sendMessage = () => {
     const msg = inputText.trim();
-    if (!msg || status !== "connected") return;
-
+    if (!msg) return;
     if (wsRef.current && wsRef.current.readyState === 1) {
-      wsRef.current.send(JSON.stringify({
-        type: "msg",
-        dir: workDir,
-        msg,
-      }));
-      addMessage({ type: "user", text: `> ${msg}` });
+      doSend(msg);
       setInputText("");
-      setProcessing(true);
+    } else {
+      enqueue(msg);
+      setInputText("");
     }
   };
 
@@ -353,14 +378,16 @@ export default function ChatScreen() {
 
   const answerQuestion = useCallback((answer) => {
     if (wsRef.current && wsRef.current.readyState === 1) {
-      wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: answer }));
-      addMessage({ type: "user", text: `> ${answer}` });
-      setProcessing(true);
+      doSend(answer);
+    } else {
+      enqueue(answer);
     }
   }, [workDir]);
 
   const selectSession = (sessionId, title) => {
     setShowSessionPicker(false);
+    pendingQueue.current = [];
+    setPendingCount(0);
     if (wsRef.current && wsRef.current.readyState === 1) {
       wsRef.current.send(JSON.stringify({ type: "select_session", sessionId: sessionId || null, dir: workDir }));
       setMessages([]);
@@ -515,7 +542,11 @@ export default function ChatScreen() {
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
         <TextInput
           style={[styles.input, styles.inputInner]}
-          placeholder={status === "connected" ? "Type a message..." : "Not connected"}
+          placeholder={
+            pendingCount > 0
+              ? `${pendingCount} message${pendingCount > 1 ? "s" : ""} pending...`
+              : status === "connected" ? "Type a message..." : "Not connected"
+          }
           placeholderTextColor="#525252"
           value={inputText}
           onChangeText={setInputText}
@@ -523,7 +554,7 @@ export default function ChatScreen() {
           numberOfLines={4}
           autoCapitalize="none"
           autoCorrect={false}
-          editable={status === "connected"}
+          editable={status === "connected" || pendingCount > 0}
           onSubmitEditing={sendMessage}
           blurOnSubmit={false}
         />
@@ -533,12 +564,11 @@ export default function ChatScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.sendBtn, status !== "connected" && { opacity: 0.3 }]}
+            style={[styles.sendBtn, pendingCount === 0 && status !== "connected" && { opacity: 0.3 }]}
             onPress={sendMessage}
-            disabled={status !== "connected"}
             activeOpacity={0.7}
           >
-            <Text style={styles.sendBtnText}>Send</Text>
+            <Text style={styles.sendBtnText}>{pendingCount > 0 ? "Queue" : "Send"}</Text>
           </TouchableOpacity>
         )}
       </View>
