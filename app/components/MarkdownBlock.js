@@ -74,9 +74,13 @@ function renderInline(line, baseStyle) {
     }
 
     if (bestPattern.style === "bold") {
-      segments.push(<Text key={key++} style={[baseStyle, styles.bold]}>{bestMatch[1]}</Text>);
+      segments.push(
+        <Text key={key++} style={[baseStyle, styles.bold]}>{renderInline(bestMatch[1], baseStyle)}</Text>
+      );
     } else if (bestPattern.style === "italic") {
-      segments.push(<Text key={key++} style={[baseStyle, styles.italic]}>{bestMatch[1]}</Text>);
+      segments.push(
+        <Text key={key++} style={[baseStyle, styles.italic]}>{renderInline(bestMatch[1], baseStyle)}</Text>
+      );
     } else if (bestPattern.style === "code") {
       segments.push(<Text key={key++} style={[baseStyle, styles.inlineCode]}>{bestMatch[1]}</Text>);
     } else if (bestPattern.style === "link") {
