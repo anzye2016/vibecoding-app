@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, Platform, Linking } from "react-native";
+import { convertLatexInText } from "../../lib/latex-to-text.js";
 
 function splitRow(line) {
   return line.split("|").slice(1, -1).map(s => s.trim());
@@ -26,7 +27,7 @@ function TableBlock({ rows }) {
         <View style={styles.tableRow}>
           {header.map((h, ci) => (
             <View key={ci} style={[styles.tableCell, styles.tableHeader, { width: colWidths[ci] }]}>
-              <Text style={styles.tableHeaderText} selectable>{renderInline(h, styles.tableHeaderText)}</Text>
+              <Text style={styles.tableHeaderText} selectable>{renderInline(convertLatexInText(h), styles.tableHeaderText)}</Text>
             </View>
           ))}
         </View>
@@ -34,7 +35,7 @@ function TableBlock({ rows }) {
           <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
             {row.map((cell, ci) => (
               <View key={ci} style={[styles.tableCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableCellText} selectable>{renderInline(cell, styles.tableCellText)}</Text>
+                <Text style={styles.tableCellText} selectable>{renderInline(convertLatexInText(cell), styles.tableCellText)}</Text>
               </View>
             ))}
           </View>
@@ -104,11 +105,12 @@ function detectLineStyle(line) {
 function renderLine(line, idx) {
   const base = detectLineStyle(line);
   const content = base ? line.slice(line.indexOf(line.trimStart()) + base.offset) : line;
+  const converted = convertLatexInText(content);
 
   if (base && base.style === "blockquote") {
     return (
       <View key={idx} style={styles.blockquote}>
-        <Text style={styles.blockquoteText} selectable>{renderInline(content, styles.blockquoteText)}</Text>
+        <Text style={styles.blockquoteText} selectable>{renderInline(converted, styles.blockquoteText)}</Text>
       </View>
     );
   }
@@ -127,7 +129,7 @@ function renderLine(line, idx) {
   }
 
   const prefix = base?.prefix || "";
-  const segments = renderInline(content, lineStyle);
+  const segments = renderInline(converted, lineStyle);
   if (prefix) {
     segments.unshift(<Text key="pre" style={lineStyle}>{prefix}</Text>);
   }
