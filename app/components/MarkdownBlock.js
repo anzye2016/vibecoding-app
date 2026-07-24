@@ -57,10 +57,10 @@ function renderInline(line, baseStyle) {
       { regex: /\[(.+?)\]\((.+?)\)/, style: "link" },
     ];
 
-    let best = null, bestMatch = null, bestPattern = null;
+    let bestIdx = Infinity, bestMatch = null, bestPattern = null;
     for (const p of patterns) {
       const m = remaining.match(p.regex);
-      if (m && (!best || m.index < best)) { best = m.index; bestMatch = m; bestPattern = p; }
+      if (m && m.index < bestIdx) { bestIdx = m.index; bestMatch = m; bestPattern = p; }
     }
 
     if (!bestMatch) {
