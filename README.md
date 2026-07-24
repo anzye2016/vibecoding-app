@@ -245,4 +245,4 @@ APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
 
 ## 许可
 
-Apache-2.0 — 见 [LICENSE](./LICENSE)
+MIT — 见 [LICENSE](./LICENSE)

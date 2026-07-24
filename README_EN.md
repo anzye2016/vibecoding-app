@@ -245,4 +245,4 @@ Third-party dependencies (npm, pip, Expo, React Native) are subject to their own
 
 ## License
 
-Apache-2.0 — see [LICENSE](./LICENSE)
+MIT — see [LICENSE](./LICENSE)
