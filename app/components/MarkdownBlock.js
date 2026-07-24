@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Platform, Linking } from "react-native";
 
 function splitRow(line) {
   return line.split("|").slice(1, -1).map(s => s.trim());
@@ -26,7 +26,7 @@ function TableBlock({ rows }) {
         <View style={styles.tableRow}>
           {header.map((h, ci) => (
             <View key={ci} style={[styles.tableCell, styles.tableHeader, { width: colWidths[ci] }]}>
-              <Text style={styles.tableHeaderText} selectable>{h}</Text>
+              <Text style={styles.tableHeaderText} selectable>{renderInline(h, styles.tableHeaderText)}</Text>
             </View>
           ))}
         </View>
@@ -34,7 +34,7 @@ function TableBlock({ rows }) {
           <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
             {row.map((cell, ci) => (
               <View key={ci} style={[styles.tableCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableCellText} selectable>{cell}</Text>
+                <Text style={styles.tableCellText} selectable>{renderInline(cell, styles.tableCellText)}</Text>
               </View>
             ))}
           </View>
@@ -79,7 +79,9 @@ function renderInline(line, baseStyle) {
     } else if (bestPattern.style === "code") {
       segments.push(<Text key={key++} style={[baseStyle, styles.inlineCode]}>{bestMatch[1]}</Text>);
     } else if (bestPattern.style === "link") {
-      segments.push(<Text key={key++} style={[baseStyle, styles.link]}>{bestMatch[1]}</Text>);
+      segments.push(
+        <Text key={key++} style={[baseStyle, styles.link]} onPress={() => Linking.openURL(bestMatch[2])}>{bestMatch[1]}</Text>
+      );
     }
 
     remaining = remaining.slice(bestMatch.index + bestMatch[0].length);
