@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, Platform, Linking } from "react-native";
+import { useMemo } from "react";
 import { convertLatexInText } from "../../lib/latex-to-text.js";
 
 function splitRow(line) {
@@ -9,7 +10,7 @@ function isSep(line) {
   return /^\|[\s\-:|]+\|$/.test(line);
 }
 
-function TableBlock({ rows }) {
+function TableBlock({ rows, style: s }) {
   const header = rows[0];
   const body = rows.slice(1);
   const colCount = header.length;
@@ -22,20 +23,20 @@ function TableBlock({ rows }) {
   const totalWidth = colWidths.reduce((a, b) => a + b, 0) + colCount;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator style={styles.tableScroll}>
+    <ScrollView horizontal showsHorizontalScrollIndicator style={s.tableScroll}>
       <View style={{ width: totalWidth }}>
-        <View style={styles.tableRow}>
+        <View style={s.tableRow}>
           {header.map((h, ci) => (
-            <View key={ci} style={[styles.tableCell, styles.tableHeader, { width: colWidths[ci] }]}>
-              <Text style={styles.tableHeaderText} selectable>{renderInline(convertLatexInText(h), styles.tableHeaderText)}</Text>
+            <View key={ci} style={[s.tableCell, s.tableHeader, { width: colWidths[ci] }]}>
+              <Text style={s.tableHeaderText} selectable>{renderInline(convertLatexInText(h), s.tableHeaderText, s)}</Text>
             </View>
           ))}
         </View>
         {body.map((row, ri) => (
-          <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
+          <View key={ri} style={[s.tableRow, ri % 2 === 1 && s.tableRowAlt]}>
             {row.map((cell, ci) => (
-              <View key={ci} style={[styles.tableCell, { width: colWidths[ci] }]}>
-                <Text style={styles.tableCellText} selectable>{renderInline(convertLatexInText(cell), styles.tableCellText)}</Text>
+              <View key={ci} style={[s.tableCell, { width: colWidths[ci] }]}>
+                <Text style={s.tableCellText} selectable>{renderInline(convertLatexInText(cell), s.tableCellText, s)}</Text>
               </View>
             ))}
           </View>
@@ -45,7 +46,7 @@ function TableBlock({ rows }) {
   );
 }
 
-function renderInline(line, baseStyle) {
+function renderInline(line, baseStyle, s) {
   const segments = [];
   let remaining = line;
   let key = 0;
@@ -75,17 +76,17 @@ function renderInline(line, baseStyle) {
 
     if (bestPattern.style === "bold") {
       segments.push(
-        <Text key={key++} style={[baseStyle, styles.bold]}>{renderInline(bestMatch[1], baseStyle)}</Text>
+        <Text key={key++} style={[baseStyle, s.bold]}>{renderInline(bestMatch[1], baseStyle, s)}</Text>
       );
     } else if (bestPattern.style === "italic") {
       segments.push(
-        <Text key={key++} style={[baseStyle, styles.italic]}>{renderInline(bestMatch[1], baseStyle)}</Text>
+        <Text key={key++} style={[baseStyle, s.italic]}>{renderInline(bestMatch[1], baseStyle, s)}</Text>
       );
     } else if (bestPattern.style === "code") {
-      segments.push(<Text key={key++} style={[baseStyle, styles.inlineCode]}>{bestMatch[1]}</Text>);
+      segments.push(<Text key={key++} style={[baseStyle, s.inlineCode]}>{bestMatch[1]}</Text>);
     } else if (bestPattern.style === "link") {
       segments.push(
-        <Text key={key++} style={[baseStyle, styles.link]} onPress={() => Linking.openURL(bestMatch[2])}>{bestMatch[1]}</Text>
+        <Text key={key++} style={[baseStyle, s.link]} onPress={() => Linking.openURL(bestMatch[2])}>{bestMatch[1]}</Text>
       );
     }
 
@@ -106,34 +107,34 @@ function detectLineStyle(line) {
   return null;
 }
 
-function renderLine(line, idx) {
+function renderLine(line, idx, s) {
   const base = detectLineStyle(line);
   const content = base ? line.slice(line.indexOf(line.trimStart()) + base.offset) : line;
   const converted = convertLatexInText(content);
 
   if (base && base.style === "blockquote") {
     return (
-      <View key={idx} style={styles.blockquote}>
-        <Text style={styles.blockquoteText} selectable>{renderInline(converted, styles.blockquoteText)}</Text>
+      <View key={idx} style={s.blockquote}>
+        <Text style={s.blockquoteText} selectable>{renderInline(converted, s.blockquoteText, s)}</Text>
       </View>
     );
   }
 
   let lineStyle;
   if (!base) {
-    lineStyle = styles.line;
+    lineStyle = s.line;
   } else if (base.style === "h1") {
-    lineStyle = styles.h1;
+    lineStyle = s.h1;
   } else if (base.style === "h2") {
-    lineStyle = styles.h2;
+    lineStyle = s.h2;
   } else if (base.style === "h3") {
-    lineStyle = styles.h3;
+    lineStyle = s.h3;
   } else {
-    lineStyle = styles.line;
+    lineStyle = s.line;
   }
 
   const prefix = base?.prefix || "";
-  const segments = renderInline(converted, lineStyle);
+  const segments = renderInline(converted, lineStyle, s);
   if (prefix) {
     segments.unshift(<Text key="pre" style={lineStyle}>{prefix}</Text>);
   }
@@ -141,8 +142,10 @@ function renderLine(line, idx) {
   return <Text key={idx} style={lineStyle} selectable>{segments}</Text>;
 }
 
-export default function MarkdownBlock({ text }) {
+export default function MarkdownBlock({ text, C }) {
   if (!text) return null;
+
+  const s = useMemo(() => markdownStyles(C), [C]);
 
   const elements = [];
   const lines = text.split("\n");
@@ -156,12 +159,12 @@ export default function MarkdownBlock({ text }) {
       for (const tl of textLines) {
         const dl = detectLineStyle(tl);
         if (dl && dl.style === "blockquote") {
-          elements.push(renderLine(tl, elements.length));
+          elements.push(renderLine(tl, elements.length, s));
         } else if (dl) {
           const trimmed = tl.trimStart();
-          elements.push(renderLine(trimmed, elements.length));
+          elements.push(renderLine(trimmed, elements.length, s));
         } else {
-          elements.push(renderLine(tl, elements.length));
+          elements.push(renderLine(tl, elements.length, s));
         }
       }
       textLines = [];
@@ -179,8 +182,8 @@ export default function MarkdownBlock({ text }) {
       } else {
         inCode = false;
         elements.push(
-          <View key={elements.length} style={styles.codeBlock}>
-            <Text style={styles.codeText} selectable>{codeLines.join("\n")}</Text>
+          <View key={elements.length} style={s.codeBlock}>
+            <Text style={s.codeText} selectable>{codeLines.join("\n")}</Text>
           </View>
         );
       }
@@ -200,7 +203,7 @@ export default function MarkdownBlock({ text }) {
         tableRows.push(splitRow(lines[i]));
       }
       i--;
-      elements.push(<TableBlock key={elements.length} rows={tableRows} />);
+      elements.push(<TableBlock key={elements.length} rows={tableRows} style={s} />);
       continue;
     }
 
@@ -211,21 +214,29 @@ export default function MarkdownBlock({ text }) {
 
   if (inCode) {
     elements.push(
-      <View key={elements.length} style={styles.codeBlock}>
-        <Text style={styles.codeText} selectable>{codeLines.join("\n")}</Text>
+      <View key={elements.length} style={s.codeBlock}>
+        <Text style={s.codeText} selectable>{codeLines.join("\n")}</Text>
       </View>
     );
   }
 
-  return <View style={styles.container}>{elements}</View>;
+  return <View style={s.container}>{elements}</View>;
 }
 
-const styles = StyleSheet.create({
+function markdownStyles(C) {
+  const isDark = C.text === "#a3a3a3" && C.bg === "#0a0a0a";
+  const codeBg = isDark ? "#1a1a1a" : "#E8E8E8";
+  const codeColor = isDark ? "#93c5fd" : "#1d4ed8";
+  const linkColor = isDark ? "#60a5fa" : "#1d4ed8";
+  const blockBg = isDark ? "#111111" : "#F0EFEC";
+  const altBg = isDark ? "#111111" : "#F0EFEC";
+
+  return StyleSheet.create({
   container: {
     paddingVertical: 2,
   },
   line: {
-    color: "#d4d4d4",
+    color: C.textBright,
     fontSize: 16,
     lineHeight: 24,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
@@ -237,17 +248,17 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   inlineCode: {
-    backgroundColor: "#1a1a1a",
-    color: "#93c5fd",
+    backgroundColor: codeBg,
+    color: codeColor,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 15,
   },
   link: {
-    color: "#60a5fa",
+    color: linkColor,
     textDecorationLine: "underline",
   },
   h1: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 20,
     lineHeight: 28,
     fontWeight: "700",
@@ -256,7 +267,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   h2: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 18,
     lineHeight: 26,
     fontWeight: "600",
@@ -265,7 +276,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   h3: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 16,
     lineHeight: 24,
     fontWeight: "600",
@@ -275,27 +286,27 @@ const styles = StyleSheet.create({
   },
   blockquote: {
     borderLeftWidth: 2,
-    borderLeftColor: "#525252",
+    borderLeftColor: C.placeholder,
     paddingLeft: 12,
     marginVertical: 4,
   },
   blockquoteText: {
-    color: "#a3a3a3",
+    color: C.text,
     fontSize: 15,
     lineHeight: 22,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontStyle: "italic",
   },
   codeBlock: {
-    backgroundColor: "#111111",
+    backgroundColor: blockBg,
     borderLeftWidth: 2,
-    borderLeftColor: "#2563eb",
+    borderLeftColor: codeColor,
     padding: 10,
     marginVertical: 8,
     borderRadius: 6,
   },
   codeText: {
-    color: "#a3a3a3",
+    color: C.textBright,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 14,
     lineHeight: 21,
@@ -307,28 +318,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   tableRowAlt: {
-    backgroundColor: "#111111",
+    backgroundColor: altBg,
   },
   tableCell: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#2a2a2a",
+    borderColor: C.border,
     paddingHorizontal: 8,
     paddingVertical: 6,
     justifyContent: "center",
   },
   tableHeader: {
-    backgroundColor: "#1a2a3a",
+    backgroundColor: codeBg,
   },
   tableHeaderText: {
-    color: "#93c5fd",
+    color: codeColor,
     fontSize: 15,
     fontWeight: "600",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   tableCellText: {
-    color: "#d4d4d4",
+    color: C.textBright,
     fontSize: 15,
     lineHeight: 22,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
 });
+}

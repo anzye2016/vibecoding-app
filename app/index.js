@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Modal,
   FlatList,
   AppState,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -44,7 +45,7 @@ function QuestionBlock({ questionData, beforeText, onAnswer }) {
 
   return (
     <View style={styles.questionContainer}>
-      {beforeText ? <MarkdownBlock text={beforeText} /> : null}
+      {beforeText ? <MarkdownBlock text={beforeText} C={C} /> : null}
       {questionData.questions.map((q, qi) => {
         const options = Array.isArray(q.options) ? q.options : [];
         return (
@@ -133,6 +134,23 @@ export default function ChatScreen() {
   const [sessionLabel, setSessionLabel] = useState("(auto)");
   const [pendingCount, setPendingCount] = useState(0);
   const pendingQueue = useRef([]);
+  const [theme, setTheme] = useState("dark");
+  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+
+  const darkColors = {
+    bg: "#0a0a0a", card: "#1a1a1a", cardAlt: "#141414",
+    text: "#a3a3a3", textBright: "#e5e5e5",
+    border: "#1f1f1f", input: "#141414", placeholder: "#525252",
+    blue: "#2563eb", blueLight: "#93c5fd",
+  };
+  const lightColors = {
+    bg: "#F7F6F3", card: "#FFFFFF", cardAlt: "#FFFFFF",
+    text: "#000000", textBright: "#000000",
+    border: "#EAEAEA", input: "#FFFFFF", placeholder: "#B0B0B0",
+    blue: "#1d4ed8", blueLight: "#2563eb",
+  };
+  const C = theme === "dark" ? darkColors : lightColors;
+  const styles = useMemo(() => useStyles(C), [C]);
 
   const doSend = (text) => {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
@@ -405,10 +423,8 @@ export default function ChatScreen() {
   const wrapperProps = Platform.OS === "ios" ? { behavior: "padding", keyboardVerticalOffset: 0 } : {};
 
   return (
-    <Wrapper
-      style={[styles.container, { paddingTop: insets.top }]}
-      {...wrapperProps}
-    >
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerToggle}
@@ -420,6 +436,9 @@ export default function ChatScreen() {
             {status === "connected" ? roomId : "Disconnected"}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={toggleTheme} style={styles.themeBtn} activeOpacity={0.6}>
+          <Text style={styles.themeBtnText}>{theme === "dark" ? "☀️" : "🌙"}</Text>
+        </TouchableOpacity>
       </View>
 
       {showSetup && (
@@ -427,7 +446,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.setupInput}
             placeholder="Relay URL (default: wss://localhost:8766/vibecoding/ws)"
-            placeholderTextColor="#525252"
+            placeholderTextColor={C.placeholder}
             value={relayUrl}
             onChangeText={setRelayUrl}
             autoCapitalize="none"
@@ -436,7 +455,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.setupInput}
             placeholder="Token"
-            placeholderTextColor="#525252"
+            placeholderTextColor={C.placeholder}
             value={token}
             onChangeText={setToken}
             autoCapitalize="none"
@@ -446,7 +465,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.setupInput}
             placeholder="Room ID"
-            placeholderTextColor="#525252"
+            placeholderTextColor={C.placeholder}
             value={roomId}
             onChangeText={setRoomId}
             autoCapitalize="none"
@@ -455,7 +474,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.setupInput}
               placeholder="Work dir (e.g. /mnt/c/Users/YOU/projects)"
-            placeholderTextColor="#525252"
+            placeholderTextColor={C.placeholder}
             value={workDir}
             onChangeText={setWorkDir}
             autoCapitalize="none"
@@ -464,7 +483,7 @@ export default function ChatScreen() {
           <TouchableOpacity
             style={[
               styles.connectBtn,
-              { backgroundColor: status === "connected" ? "#dc2626" : "#2563eb" },
+              { backgroundColor: status === "connected" ? "#dc2626" : C.blue },
               status === "connecting" && { opacity: 0.5 },
             ]}
             onPress={status === "connected" ? disconnect : connect}
@@ -526,12 +545,12 @@ export default function ChatScreen() {
             if (questions && questions.length > 0) {
               return <QuestionBlock key={i} questionData={parsed.data} beforeText={parsed.before} onAnswer={answerQuestion} />;
             }
-            return <MarkdownBlock key={i} text={msg.text} />;
+              return <MarkdownBlock key={i} text={msg.text} C={C} />;
           }
           if (msg.type === "spacer") {
             return <View key={i} style={{ height: 16 }} />;
           }
-          return <MarkdownBlock key={i} text={msg.text} />;
+          return <MarkdownBlock key={i} text={msg.text} C={C} />;
         })}
         {processing && (
           <View style={styles.thinkingBar}>
@@ -549,7 +568,7 @@ export default function ChatScreen() {
               ? `${pendingCount} message${pendingCount > 1 ? "s" : ""} pending...`
               : status === "connected" ? "Type a message..." : "Not connected"
           }
-          placeholderTextColor="#525252"
+          placeholderTextColor={C.placeholder}
           value={inputText}
           onChangeText={setInputText}
           multiline
@@ -616,14 +635,14 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
-    </Wrapper>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = (C) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: C.bg,
   },
   header: {
     flexDirection: "row",
@@ -631,13 +650,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1f1f1f",
+    borderBottomColor: C.border,
   },
   headerToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     flex: 1,
+    paddingVertical: 14,
+  },
+  themeBtn: {
+    paddingLeft: 12,
+    paddingVertical: 8,
+  },
+  themeBtnText: {
+    fontSize: 18,
   },
   statusDot: {
     width: 8,
@@ -645,7 +672,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   headerTitle: {
-    color: "#a3a3a3",
+    color: C.text,
     fontSize: 14,
     fontWeight: "500",
     flex: 1,
@@ -654,17 +681,17 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1f1f1f",
-    backgroundColor: "#141414",
+    borderBottomColor: C.border,
+    backgroundColor: C.cardAlt,
   },
   setupInput: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: C.input,
     borderWidth: 1,
-    borderColor: "#262626",
+    borderColor: C.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 14,
   },
   connectBtn: {
@@ -684,7 +711,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   emptyHint: {
-    color: "#525252",
+    color: C.placeholder,
     fontSize: 14,
     textAlign: "center",
     marginTop: 40,
@@ -702,7 +729,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   userLine: {
-    color: "#93c5fd",
+    color: C.blueLight,
     fontSize: 16,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     lineHeight: 24,
@@ -716,25 +743,25 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#1f1f1f",
-    backgroundColor: "#0a0a0a",
+    borderTopColor: C.border,
+    backgroundColor: C.bg,
   },
   input: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: "#262626",
+    borderColor: C.border,
     borderRadius: 12,
   },
   inputInner: {
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 14,
     textAlignVertical: "top",
   },
   sendBtn: {
-    backgroundColor: "#2563eb",
+    backgroundColor: C.blue,
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 10,
@@ -762,19 +789,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   thinkingDot: {
-    color: "#a3a3a3",
+    color: C.text,
     fontSize: 16,
     fontFamily: "monospace",
   },
   thinkingText: {
-    color: "#525252",
+    color: C.placeholder,
     fontSize: 14,
     fontStyle: "italic",
   },
   sessionBtn: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: "#262626",
+    borderColor: C.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -783,11 +810,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sessionBtnLabel: {
-    color: "#737373",
+    color: C.text,
     fontSize: 13,
   },
   sessionBtnValue: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 13,
     flex: 1,
   },
@@ -797,7 +824,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#141414",
+    backgroundColor: C.cardAlt,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: "60%",
@@ -810,36 +837,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1f1f1f",
+    borderBottomColor: C.border,
   },
   modalTitle: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 16,
     fontWeight: "600",
   },
   modalClose: {
-    color: "#737373",
+    color: C.text,
     fontSize: 14,
   },
   sessionItem: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1f1f1f",
+    borderBottomColor: C.border,
   },
   sessionItemActive: {
-    backgroundColor: "#1a2a3a",
+    backgroundColor: C.border,
   },
   sessionItemTitle: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 14,
     fontWeight: "500",
   },
   sessionItemTitleActive: {
-    color: "#93c5fd",
+    color: C.blueLight,
   },
   sessionItemDate: {
-    color: "#525252",
+    color: C.placeholder,
     fontSize: 12,
     marginTop: 4,
   },
@@ -856,15 +883,15 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   questionText: {
-    color: "#e5e5e5",
+    color: C.textBright,
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 8,
   },
   optionBtn: {
-    backgroundColor: "#1a1a2e",
+    backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: "#2a2a4a",
+    borderColor: C.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -874,12 +901,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   optionLabel: {
-    color: "#93c5fd",
+    color: C.blueLight,
     fontSize: 14,
     fontWeight: "500",
   },
   optionDesc: {
-    color: "#a3a3a3",
+    color: C.text,
     fontSize: 12,
     marginTop: 3,
     lineHeight: 17,
