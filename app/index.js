@@ -6,17 +6,70 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
   Modal,
   FlatList,
   AppState,
   StatusBar,
+  Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Slider from "@react-native-community/slider";
 import MarkdownBlock from "./components/MarkdownBlock";
+import * as ImagePicker from "expo-image-picker";
+
+const THEME_PALETTES = {
+  zinc: {
+    name: "Zinc", desc: "翡翠绿 · 专业中性",
+    dark: { bg: "#09090b", text: "#fafafa", accent: "#34d399", text2: "#a1a1aa" },
+    light: { bg: "#fafafa", text: "#3f3f46", accent: "#10b981", text2: "#a1a1aa" },
+  },
+  slate: {
+    name: "Slate", desc: "湛蓝 · 冷静克制",
+    dark: { bg: "#020617", text: "#f8fafc", accent: "#60a5fa", text2: "#94a3b8" },
+    light: { bg: "#f8fafc", text: "#334155", accent: "#3b82f6", text2: "#94a3b8" },
+  },
+  forest: {
+    name: "Forest", desc: "森林绿 · 自然深邃",
+    dark: { bg: "#052e16", text: "#f0fdf4", accent: "#22c55e", text2: "#86efac" },
+    light: { bg: "#f0fdf4", text: "#166534", accent: "#16a34a", text2: "#86efac" },
+  },
+  rose: {
+    name: "Rose", desc: "玫瑰红 · 温暖大胆",
+    dark: { bg: "#1f0a0c", text: "#fff1f2", accent: "#fb7185", text2: "#fda4af" },
+    light: { bg: "#fff1f2", text: "#881337", accent: "#e11d48", text2: "#fda4af" },
+  },
+  amber: {
+    name: "Amber", desc: "琥珀黄 · 温暖明亮",
+    dark: { bg: "#1c1402", text: "#fffbeb", accent: "#fbbf24", text2: "#fde68a" },
+    light: { bg: "#fffbeb", text: "#78350f", accent: "#d97706", text2: "#fde68a" },
+  },
+};
+
+function hexToRgb(h) { return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) }; }
+function rgbToHex(r,g,b) { return `#${Math.min(255,Math.max(0,Math.round(r))).toString(16).padStart(2,"0")}${Math.min(255,Math.max(0,Math.round(g))).toString(16).padStart(2,"0")}${Math.min(255,Math.max(0,Math.round(b))).toString(16).padStart(2,"0")}`; }
+function lighten(h, amt) { const c=hexToRgb(h); return rgbToHex(c.r+amt, c.g+amt, c.b+amt); }
+function darken(h, amt) { const c=hexToRgb(h); return rgbToHex(c.r-amt, c.g-amt, c.b-amt); }
+function isLightHex(h) { const c=hexToRgb(h); return c.r*0.299 + c.g*0.587 + c.b*0.114 > 160; }
+
+function buildPalette(p) {
+  const light = isLightHex(p.bg);
+  return {
+    bg: p.bg, text: p.text, accent: p.accent, text2: p.text2,
+    card: light ? lighten(p.bg, 20) : lighten(p.bg, 12),
+    cardAlt: light ? lighten(p.bg, 12) : lighten(p.bg, 8),
+    textBright: p.text,
+    border: light ? `rgba(0,0,0,0.08)` : `rgba(255,255,255,0.08)`,
+    input: light ? darken(p.bg, 6) : lighten(p.bg, 8),
+    placeholder: light ? lighten(p.text2, 60) : darken(p.text2, 40),
+    accentLight: light ? darken(p.accent, 10) : lighten(p.accent, 20),
+    codeBg: light ? `rgba(0,0,0,0.04)` : `rgba(0,0,0,0.15)`,
+    shadow: light ? "0 1px 3px rgba(0,0,0,0.04)" : "0 1px 3px rgba(0,0,0,0.2)",
+  };
+}
 
 function tryParseQuestion(text) {
   if (!text) return null;
@@ -76,6 +129,10 @@ const STORAGE_KEYS = {
   ROOM: "vibecoding_room",
   DIR: "vibecoding_dir",
   RELAY: "vibecoding_relay",
+  THEME: "vibecoding_theme",
+  CUSTOM_COLORS: "vibecoding_custom_colors",
+  BG_IMAGE: "vibecoding_bg_image",
+  BG_OPACITY: "vibecoding_bg_opacity",
 };
 
 const DEFAULT_RELAY = "wss://localhost:8766/vibecoding/ws";
@@ -93,7 +150,6 @@ export default function ChatScreen() {
   const [processing, setProcessing] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
-  const [showSetup, setShowSetup] = useState(true);
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
   const historyLoadedRef = useRef(false);
@@ -134,28 +190,22 @@ export default function ChatScreen() {
   const [sessionLabel, setSessionLabel] = useState("(auto)");
   const [pendingCount, setPendingCount] = useState(0);
   const pendingQueue = useRef([]);
-  const [theme, setTheme] = useState("dark");
-  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+  const [themeName, setThemeName] = useState("zinc");
+  const [isDark, setIsDark] = useState(true);
+  const [customColors, setCustomColors] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [bgImage, setBgImage] = useState(null);
+  const [bgOpacity, setBgOpacity] = useState(0.6);
 
-  const darkColors = {
-    bg: "#0a0a0a", card: "#1a1a1a", cardAlt: "#141414",
-    text: "#a3a3a3", textBright: "#e5e5e5",
-    border: "#1f1f1f", input: "#141414", placeholder: "#525252",
-    blue: "#2563eb", blueLight: "#93c5fd",
-  };
-  const lightColors = {
-    bg: "#F7F6F3", card: "#FFFFFF", cardAlt: "#FFFFFF",
-    text: "#000000", textBright: "#000000",
-    border: "#EAEAEA", input: "#FFFFFF", placeholder: "#B0B0B0",
-    blue: "#1d4ed8", blueLight: "#2563eb",
-  };
-  const C = theme === "dark" ? darkColors : lightColors;
+  const basePalette = isDark ? THEME_PALETTES[themeName].dark : THEME_PALETTES[themeName].light;
+  const palette = customColors ? { ...basePalette, ...customColors } : basePalette;
+  const C = useMemo(() => buildPalette(palette), [palette]);
   const styles = useMemo(() => useStyles(C), [C]);
 
   const doSend = (text) => {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: text }));
-    addMessage({ type: "user", text: `> ${text}` });
+    addMessage({ type: "user", text: `${text}` });
     setProcessing(true);
   };
 
@@ -199,6 +249,10 @@ export default function ChatScreen() {
       AsyncStorage.getItem(STORAGE_KEYS.ROOM).then((v) => { if (v) setRoomId(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.DIR).then((v) => { if (v) setWorkDir(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.RELAY).then((v) => { if (v) setRelayUrl(v); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.THEME).then((v) => { if (v) { const { n, d } = JSON.parse(v); setThemeName(n); setIsDark(d); } }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_COLORS).then((v) => { if (v) setCustomColors(JSON.parse(v)); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.BG_IMAGE).then((v) => { if (v) setBgImage(v); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.BG_OPACITY).then((v) => { if (v) setBgOpacity(parseFloat(v)); }).catch(() => {});
     } catch (_) {}
   }, []);
 
@@ -217,6 +271,30 @@ export default function ChatScreen() {
   useEffect(() => {
     if (relayUrl) AsyncStorage.setItem(STORAGE_KEYS.RELAY, relayUrl);
   }, [relayUrl]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify({ n: themeName, d: isDark }));
+  }, [themeName, isDark]);
+
+  useEffect(() => {
+    if (customColors) {
+      AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_COLORS, JSON.stringify(customColors));
+    } else {
+      AsyncStorage.removeItem(STORAGE_KEYS.CUSTOM_COLORS);
+    }
+  }, [customColors]);
+
+  useEffect(() => {
+    if (bgImage) {
+      AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage);
+    } else {
+      AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE);
+    }
+  }, [bgImage]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity));
+  }, [bgOpacity]);
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
@@ -263,7 +341,6 @@ export default function ChatScreen() {
     intentionalDisconnect.current = false;
 
     setStatus("connecting");
-    setShowSetup(false);
 
     const url = `${relayUrl || DEFAULT_RELAY}/${encodeURIComponent(roomId.trim())}/phone`;
     const ws = new WebSocket(url, token.trim());
@@ -332,11 +409,13 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "history") {
+          console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
+          setMessages([]);
           if (msg.rounds && Array.isArray(msg.rounds)) {
             msg.rounds.forEach((r, idx) => {
               if (idx > 0) addMessage({ type: "spacer" });
-              addMessage({ type: "history-user", text: `> ${r.user}` });
+              addMessage({ type: "history-user", text: r.user });
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
@@ -419,101 +498,35 @@ export default function ChatScreen() {
     setCurrentSessionId(sessionId || null);
   };
 
-  const Wrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
-  const wrapperProps = Platform.OS === "ios" ? { behavior: "padding", keyboardVerticalOffset: 0 } : {};
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerToggle}
-          onPress={() => setShowSetup(!showSetup)}
-          activeOpacity={0.7}
-        >
+        <View style={styles.headerLeft}>
           <View style={[styles.statusDot, { backgroundColor: status === "connected" ? "#4ade80" : status === "connecting" ? "#facc15" : "#ef4444" }]} />
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {status === "connected" ? roomId : "Disconnected"}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={toggleTheme} style={styles.themeBtn} activeOpacity={0.6}>
-          <Text style={styles.themeBtnText}>{theme === "dark" ? "☀️" : "🌙"}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {currentSessionId ? sessionLabel || "(unnamed)" : (status === "connected" ? roomId : "Disconnected")}
+            </Text>
+            <Text style={styles.headerSub}>
+              {status === "connected" ? "Connected · opencode" : status === "connecting" ? "Connecting..." : "Offline"}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
+          <Text style={styles.themeBtnText}>⚙</Text>
         </TouchableOpacity>
       </View>
 
-      {showSetup && (
-        <View style={styles.setupBar}>
-          <TextInput
-            style={styles.setupInput}
-            placeholder="Relay URL (default: wss://localhost:8766/vibecoding/ws)"
-            placeholderTextColor={C.placeholder}
-            value={relayUrl}
-            onChangeText={setRelayUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            style={styles.setupInput}
-            placeholder="Token"
-            placeholderTextColor={C.placeholder}
-            value={token}
-            onChangeText={setToken}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.setupInput}
-            placeholder="Room ID"
-            placeholderTextColor={C.placeholder}
-            value={roomId}
-            onChangeText={setRoomId}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            style={styles.setupInput}
-              placeholder="Work dir (e.g. /mnt/c/Users/YOU/projects)"
-            placeholderTextColor={C.placeholder}
-            value={workDir}
-            onChangeText={setWorkDir}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TouchableOpacity
-            style={[
-              styles.connectBtn,
-              { backgroundColor: status === "connected" ? "#dc2626" : C.blue },
-              status === "connecting" && { opacity: 0.5 },
-            ]}
-            onPress={status === "connected" ? disconnect : connect}
-            disabled={status === "connecting"}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.connectBtnText}>
-              {status === "connected" ? "Disconnect" : status === "connecting" ? "Connecting..." : "Connect"}
-            </Text>
-          </TouchableOpacity>
-          {status === "connected" && (
-            <TouchableOpacity
-              style={styles.sessionBtn}
-              onPress={() => setShowSessionPicker(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.sessionBtnLabel}>Session</Text>
-              <Text style={styles.sessionBtnValue} numberOfLines={1}>{sessionLabel}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      <ScrollView
-        ref={scrollRef}
-        style={styles.output}
-        contentContainerStyle={styles.outputContent}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1 }}>
+        {bgImage ? <Image source={{ uri: bgImage }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: bgOpacity }} resizeMode="cover" /> : null}
+        <ScrollView
+          ref={scrollRef}
+          style={styles.output}
+          contentContainerStyle={styles.outputContent}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+        >
         {messages.length === 0 && (
           <Text style={styles.emptyHint}>Set Token, Room ID and tap Connect</Text>
         )}
@@ -534,23 +547,31 @@ export default function ChatScreen() {
           }
           if (msg.type === "user" || msg.type === "history-user") {
             return (
-              <TouchableOpacity key={i} activeOpacity={1.0}>
-                <Text style={styles.userLine} selectable>{msg.text}</Text>
-              </TouchableOpacity>
+              <View key={i} style={styles.userBubble}>
+                <Text style={styles.userBubbleText} selectable>{msg.text}</Text>
+              </View>
             );
           }
           if (msg.type === "chunk" || msg.type === "history-assistant") {
             const parsed = tryParseQuestion(msg.text);
             const questions = parsed && Array.isArray(parsed.data.questions) ? parsed.data.questions : null;
             if (questions && questions.length > 0) {
-              return <QuestionBlock key={i} questionData={parsed.data} beforeText={parsed.before} onAnswer={answerQuestion} />;
+              return <QuestionBlock key={i} questionData={parsed.data} beforeText={parsed.before} onAnswer={answerQuestion} C={C} />;
             }
-              return <MarkdownBlock key={i} text={msg.text} C={C} />;
+            return (
+              <View key={i} style={styles.assistantBubble}>
+                <MarkdownBlock text={msg.text} C={C} />
+              </View>
+            );
           }
           if (msg.type === "spacer") {
             return <View key={i} style={{ height: 16 }} />;
           }
-          return <MarkdownBlock key={i} text={msg.text} C={C} />;
+          return (
+            <View key={i} style={styles.assistantBubble}>
+              <MarkdownBlock text={msg.text} C={C} />
+            </View>
+          );
         })}
         {processing && (
           <View style={styles.thinkingBar}>
@@ -559,6 +580,7 @@ export default function ChatScreen() {
           </View>
         )}
       </ScrollView>
+      </View>
 
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 + kbHeight }]}>
         <TextInput
@@ -600,6 +622,7 @@ export default function ChatScreen() {
         onRequestClose={() => setShowSessionPicker(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowSessionPicker(false)} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Sessions</Text>
@@ -635,6 +658,103 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Settings Modal ── */}
+      <Modal
+        visible={showSettings}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowSettings(false)} />
+          <View style={{ backgroundColor: C.cardAlt, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "80%", paddingBottom: 40, minHeight: 300 }}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettings(false)} activeOpacity={0.7}>
+                <Text style={styles.modalClose}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 400 }}>
+              <View style={{ padding: 16 }}>
+              <Text style={styles.sectionLabel}>Connection</Text>
+              <View style={{ height: 8 }} />
+              <TextInput style={styles.setupInput} placeholder="Relay URL" placeholderTextColor={C.placeholder} value={relayUrl} onChangeText={setRelayUrl} autoCapitalize="none" autoCorrect={false} />
+              <View style={{ height: 8 }} />
+              <TextInput style={styles.setupInput} placeholder="Token" placeholderTextColor={C.placeholder} value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+              <View style={{ height: 8 }} />
+              <TextInput style={styles.setupInput} placeholder="Room ID" placeholderTextColor={C.placeholder} value={roomId} onChangeText={setRoomId} autoCapitalize="none" autoCorrect={false} />
+              <View style={{ height: 8 }} />
+              <TextInput style={styles.setupInput} placeholder="Work dir" placeholderTextColor={C.placeholder} value={workDir} onChangeText={setWorkDir} autoCapitalize="none" autoCorrect={false} />
+              <View style={{ height: 8 }} />
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "connected" ? disconnect : connect} disabled={status === "connecting"} activeOpacity={0.8}>
+                  <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Connecting..." : "Connect"}</Text>
+                </TouchableOpacity>
+                {status === "connected" && (
+                  <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => setShowSessionPicker(true)} activeOpacity={0.7}>
+                    <Text style={[styles.connectBtnText, { color: C.text }]}>Session: {sessionLabel}</Text>
+                  </TouchableOpacity>
+                )}
+
+              <View style={{ height: 24 }} />
+              <Text style={styles.sectionLabel}>Theme</Text>
+              <View style={{ height: 8 }} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {Object.entries(THEME_PALETTES).map(([key, t]) => (
+                  <TouchableOpacity key={key} style={[styles.themeCard, !customColors && themeName === key && styles.themeCardActive]} onPress={() => { setThemeName(key); setCustomColors(null); }} activeOpacity={0.7}>
+                    <View style={{ flexDirection: "row", gap: 3, marginBottom: 4 }}>
+                      {[t.dark.bg, t.dark.text, t.dark.accent, t.dark.text2].map((c, i) => (
+                        <View key={i} style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c }} />
+                      ))}
+                    </View>
+                    <Text style={{ color: C.text, fontSize: 12, fontWeight: "500" }}>{t.name}</Text>
+                    <Text style={{ color: C.placeholder, fontSize: 10, marginTop: 1 }}>{t.desc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ height: 24 }} />
+              <Text style={styles.sectionLabel}>Mode</Text>
+              <View style={{ height: 8 }} />
+              <View style={{ flexDirection: "row", borderRadius: 8, overflow: "hidden", borderWidth: 1, borderColor: C.border }}>
+                {["dark", "light"].map(m => (
+                  <TouchableOpacity key={m} style={{ flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: (isDark ? m === "dark" : m === "light") ? C.accent : "transparent" }} onPress={() => setIsDark(m === "dark")} activeOpacity={0.7}>
+                    <Text style={{ color: (isDark ? m === "dark" : m === "light") ? "#fff" : C.text, fontSize: 13, fontWeight: "500" }}>{m === "dark" ? "Dark" : "Light"}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ height: 24 }} />
+              <Text style={styles.sectionLabel}>Custom Colors</Text>
+              <Text style={{ color: C.placeholder, fontSize: 11, marginTop: 2, marginBottom: 8 }}>Override base colors</Text>
+              {["bg", "text", "accent", "text2"].map(key => (
+                <View key={key} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <Text style={{ color: C.text2, fontSize: 12, width: 52 }}>{key}</Text>
+                  <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: /^#[0-9a-fA-F]{6}$/.test(customColors?.[key]) ? customColors[key] : palette[key], borderWidth: 1, borderColor: C.border }} />
+                  <TextInput style={styles.colorInput} value={customColors?.[key] !== undefined ? customColors[key] : palette[key]} onChangeText={(v) => setCustomColors(prev => ({ ...(prev || {}), [key]: v }))} placeholder="#hex" placeholderTextColor={C.placeholder} autoCapitalize="none" />
+                  <TouchableOpacity onPress={() => { const n = { ...(customColors || {}) }; delete n[key]; if (Object.keys(n).length === 0) setCustomColors(null); else setCustomColors(n); }} activeOpacity={0.6}>
+                    <Text style={{ color: C.accent, fontSize: 11 }}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <View style={{ height: 24 }} />
+              <Text style={styles.sectionLabel}>Chat Background</Text>
+              <View style={{ height: 8 }} />
+              <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]} onPress={async () => { if (bgImage) { setBgImage(null); return; } const perm = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!perm.granted) { Alert.alert("Permission needed", "Allow photo access in Settings to set a chat background."); return; } const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, base64: false }); if (!result.canceled && result.assets?.[0]) setBgImage(result.assets[0].uri); }} activeOpacity={0.7}>
+                <Text style={[styles.connectBtnText, { color: C.text }]}>{bgImage ? "Remove Background" : "Set Background Image"}</Text>
+              </TouchableOpacity>
+              {bgImage && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={{ color: C.text2, fontSize: 11, marginBottom: 2 }}>Opacity: {Math.round(bgOpacity * 100)}%</Text>
+                  <Slider style={{ width: "100%", height: 32 }} minimumValue={0.01} maximumValue={1} step={0.01} value={bgOpacity} onValueChange={setBgOpacity} minimumTrackTintColor={C.accent} maximumTrackTintColor={C.border} thumbTintColor={C.accent} />
+                </View>
+              )}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -647,24 +767,29 @@ const useStyles = (C) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
-  headerToggle: {
+  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     flex: 1,
-    paddingVertical: 14,
   },
   themeBtn: {
-    paddingLeft: 12,
-    paddingVertical: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   themeBtnText: {
-    fontSize: 18,
+    fontSize: 15,
   },
   statusDot: {
     width: 8,
@@ -672,23 +797,20 @@ const useStyles = (C) => StyleSheet.create({
     borderRadius: 4,
   },
   headerTitle: {
-    color: C.text,
+    color: C.textBright,
     fontSize: 14,
-    fontWeight: "500",
-    flex: 1,
+    fontWeight: "600",
   },
-  setupBar: {
-    padding: 12,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-    backgroundColor: C.cardAlt,
+  headerSub: {
+    color: C.placeholder,
+    fontSize: 11,
+    marginTop: 1,
   },
   setupInput: {
     backgroundColor: C.input,
     borderWidth: 1,
     borderColor: C.border,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: C.textBright,
@@ -728,12 +850,38 @@ const useStyles = (C) => StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     lineHeight: 20,
   },
-  userLine: {
-    color: C.blueLight,
-    fontSize: 16,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 24,
+  userBubble: {
+    alignSelf: "flex-end",
+    maxWidth: "88%",
+    backgroundColor: C.accent,
+    borderRadius: 18,
+    borderBottomRightRadius: 3,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginTop: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  userBubbleText: {
+    color: isLightHex(C.bg) ? "#09090b" : "#fff",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  assistantBubble: {
+    alignSelf: "flex-start",
+    maxWidth: "92%",
+    backgroundColor: C.card,
+    borderRadius: 18,
+    borderBottomLeftRadius: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: "hidden",
   },
 
   inputBar: {
@@ -761,7 +909,7 @@ const useStyles = (C) => StyleSheet.create({
     textAlignVertical: "top",
   },
   sendBtn: {
-    backgroundColor: C.blue,
+    backgroundColor: C.accent,
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 10,
@@ -797,26 +945,6 @@ const useStyles = (C) => StyleSheet.create({
     color: C.placeholder,
     fontSize: 14,
     fontStyle: "italic",
-  },
-  sessionBtn: {
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sessionBtnLabel: {
-    color: C.text,
-    fontSize: 13,
-  },
-  sessionBtnValue: {
-    color: C.textBright,
-    fontSize: 13,
-    flex: 1,
   },
   modalOverlay: {
     flex: 1,
@@ -863,7 +991,7 @@ const useStyles = (C) => StyleSheet.create({
     fontWeight: "500",
   },
   sessionItemTitleActive: {
-    color: C.blueLight,
+    color: C.accentLight,
   },
   sessionItemDate: {
     color: C.placeholder,
@@ -901,7 +1029,7 @@ const useStyles = (C) => StyleSheet.create({
     opacity: 0.5,
   },
   optionLabel: {
-    color: C.blueLight,
+    color: C.accentLight,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -910,5 +1038,35 @@ const useStyles = (C) => StyleSheet.create({
     fontSize: 12,
     marginTop: 3,
     lineHeight: 17,
+  },
+  sectionLabel: {
+    color: C.text2,
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  themeCard: {
+    width: "47%",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    backgroundColor: C.card,
+  },
+  themeCardActive: {
+    borderColor: C.accent,
+  },
+  colorInput: {
+    flex: 1,
+    backgroundColor: C.input,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: C.textBright,
+    fontSize: 12,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
 });

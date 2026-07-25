@@ -16,16 +16,16 @@ def extract(m):
             state = p.get("state", {})
             inp = state.get("input", {})
             if isinstance(inp, dict) and "command" in inp:
-                lines.append(f"[{name}] {inp['command']}")
+                lines.append("[{}] {}".format(name, inp["command"]))
             elif isinstance(inp, dict) and "filePath" in inp:
-                lines.append(f"[{name}] {inp['filePath']}")
+                lines.append("[{}] {}".format(name, inp["filePath"]))
             else:
-                lines.append(f"[{name}] {json.dumps(inp)[:200]}")
-    return "\n\n".join(lines).strip()
+                lines.append("[{}] {}".format(name, json.dumps(inp)[:200]))
+    result = "\n\n".join(lines).strip()
+    return result
 
 rounds = []
 u_text = None
-a_parts = []
 
 for m in msgs:
     r = m.get("info", {}).get("role")
@@ -33,14 +33,8 @@ for m in msgs:
     if not text:
         continue
     if r == "user":
-        if u_text is not None and a_parts:
-            rounds.append({"user": u_text, "assistant": "\n\n".join(a_parts)})
         u_text = text
-        a_parts = []
-    elif r == "assistant":
-        a_parts.append(text)
+    elif r == "assistant" and u_text is not None:
+        rounds.append({"user": u_text, "assistant": text})
 
-if u_text is not None and a_parts:
-    rounds.append({"user": u_text, "assistant": "\n\n".join(a_parts)})
-
-print(json.dumps(rounds[-10:]))
+print(json.dumps(rounds[-30:]))

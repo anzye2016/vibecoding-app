@@ -25,13 +25,13 @@ if (!TOKEN && existsSync(tokenFile)) {
   TOKEN = readFileSync(tokenFile, "utf-8").trim();
 }
 
+const pidFile = join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt");
 if (!TOKEN) {
   console.error("RELAY_TOKEN env var or .vibecoding-token file is required");
   try { rmSync(pidFile); } catch {}
   process.exit(1);
 }
 
-const pidFile = join(process.env.TEMP || "/tmp", "vibecoding-client-pid.txt");
 if (existsSync(pidFile)) {
   try {
     const oldPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);

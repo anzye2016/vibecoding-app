@@ -1,7 +1,9 @@
 ﻿node_modules/
 android/
+android-new/
 .expo/
 dist/
+build/
 *.apk
 *.log
 *.pyc
@@ -14,7 +16,14 @@ Thumbs.db
 .vscode/
 .idea/
 __pycache__/
+.venv/
+*.exe
+*.spec
+temp/
+design-prototypes/
 client/.vibecoding-token
 config.json
 lib/send-feishu.js
 快捷命令.txt
+compact-test-*.txt
+task.xml

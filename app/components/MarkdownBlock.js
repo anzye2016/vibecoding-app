@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, Platform, Linking } from "react-native";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { convertLatexInText } from "../../lib/latex-to-text.js";
 
 function splitRow(line) {
@@ -14,6 +14,7 @@ function TableBlock({ rows, style: s }) {
   const header = rows[0];
   const body = rows.slice(1);
   const colCount = header.length;
+  const [tableH, setTableH] = useState(0);
 
   const colWidths = header.map((_, ci) => {
     const all = rows.map(r => (r[ci] || "").length);
@@ -22,27 +23,34 @@ function TableBlock({ rows, style: s }) {
   });
   const totalWidth = colWidths.reduce((a, b) => a + b, 0) + colCount;
 
+  const onContentLayout = useCallback((e) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 10 && h !== tableH) setTableH(h);
+  }, [tableH]);
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator style={s.tableScroll}>
-      <View style={{ width: totalWidth }}>
-        <View style={s.tableRow}>
-          {header.map((h, ci) => (
-            <View key={ci} style={[s.tableCell, s.tableHeader, { width: colWidths[ci] }]}>
-              <Text style={s.tableHeaderText} selectable>{renderInline(convertLatexInText(h), s.tableHeaderText, s)}</Text>
-            </View>
-          ))}
-        </View>
-        {body.map((row, ri) => (
-          <View key={ri} style={[s.tableRow, ri % 2 === 1 && s.tableRowAlt]}>
-            {row.map((cell, ci) => (
-              <View key={ci} style={[s.tableCell, { width: colWidths[ci] }]}>
-                <Text style={s.tableCellText} selectable>{renderInline(convertLatexInText(cell), s.tableCellText, s)}</Text>
+    <View style={{ maxHeight: tableH > 0 ? tableH + 4 : undefined }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
+        <View style={{ width: totalWidth }} onLayout={onContentLayout}>
+          <View style={s.tableRow}>
+            {header.map((h, ci) => (
+              <View key={ci} style={[s.tableCell, s.tableHeader, { width: colWidths[ci] }]}>
+                <Text style={s.tableHeaderText} selectable>{renderInline(convertLatexInText(h), s.tableHeaderText, s)}</Text>
               </View>
             ))}
           </View>
-        ))}
-      </View>
-    </ScrollView>
+          {body.map((row, ri) => (
+            <View key={ri} style={[s.tableRow, ri % 2 === 1 && s.tableRowAlt]}>
+              {row.map((cell, ci) => (
+                <View key={ci} style={[s.tableCell, { width: colWidths[ci] }]}>
+                  <Text style={s.tableCellText} selectable>{renderInline(convertLatexInText(cell), s.tableCellText, s)}</Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -224,7 +232,10 @@ export default function MarkdownBlock({ text, C }) {
 }
 
 function markdownStyles(C) {
-  const isDark = C.text === "#a3a3a3" && C.bg === "#0a0a0a";
+  const isDark = (function(bg) {
+    const r=parseInt(bg.slice(1,3),16), g=parseInt(bg.slice(3,5),16), b=parseInt(bg.slice(5,7),16);
+    return r*0.299 + g*0.587 + b*0.114 <= 160;
+  })(C.bg);
   const codeBg = isDark ? "#1a1a1a" : "#E8E8E8";
   const codeColor = isDark ? "#93c5fd" : "#1d4ed8";
   const linkColor = isDark ? "#60a5fa" : "#1d4ed8";
