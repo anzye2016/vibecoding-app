@@ -330,7 +330,7 @@ export default function ChatScreen() {
             setSessionLabel("(new)");
           } else {
             const cur = (msg.sessions || []).find(s => s.id === msg.current);
-            setSessionLabel(cur ? cur.title : "(auto)");
+            setSessionLabel(cur ? (cur.title || "(unnamed)") : "(auto)");
           }
         }
       } catch (err) {
@@ -605,7 +605,7 @@ export default function ChatScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.sessionItemTitle, currentSessionId === item.id && styles.sessionItemTitleActive]} numberOfLines={1}>
-                    {item.title}
+                    {item.title || "(unnamed)"}
                   </Text>
                   <Text style={styles.sessionItemDate}>
                     {new Date(item.updated).toLocaleDateString()}

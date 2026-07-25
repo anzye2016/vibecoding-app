@@ -248,10 +248,8 @@ async function listSessions(dir) {
 async function getLastSession(dir) {
   const sessions = await listSessions(dir);
   if (sessions.length === 0) return null;
-  const named = sessions.filter(s => !s.title.startsWith("New session"));
-  const candidates = named.length > 0 ? named : sessions;
-  candidates.sort((a, b) => (b.updated || 0) - (a.updated || 0));
-  return candidates[0].id;
+  sessions.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  return sessions[0].id;
 }
 
 async function loadHistory(dir, sessionId) {
@@ -316,6 +314,10 @@ async function handleListSessions(msg) {
   const sessions = await listSessions(dir);
   const isWin = dir.match(/^[A-Za-z]:/);
   const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
+  if (!sessionCache.has(cacheKey) && !newSessionDirs.has(cacheKey)) {
+    const sid = await getLastSession(dir);
+    if (sid) sessionCache.set(cacheKey, sid);
+  }
   const current = sessionCache.get(cacheKey) || null;
   send({ type: "sessions", sessions, current, dir });
 }
@@ -552,7 +554,7 @@ async function handleMessage(msg) {
     runMessage = runMessage.slice(v[0].length).trim() || "hi";
   }
 
-  const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "-c";
+  const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "";
   const escapedMsg = runMessage
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
@@ -582,7 +584,7 @@ async function handleMessage(msg) {
   let child;
   if (isWin) {
     const args = ["run", ...fmtFlag];
-    if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
+    if (lastSessionId) args.push("-s", lastSessionId);
     if (modelFlag) args.push("-m", modelFlag);
     if (variantFlag) args.push("--variant", variantFlag);
     args.push(runMessage);
@@ -590,7 +592,7 @@ async function handleMessage(msg) {
     console.log(`[client] Running opencode natively in ${dir}: ${message}`);
   } else if (IS_LINUX) {
     const args = ["run", ...fmtFlag];
-    if (lastSessionId) { args.push("-s", lastSessionId); } else { args.push("-c"); }
+    if (lastSessionId) args.push("-s", lastSessionId);
     if (modelFlag) args.push("-m", modelFlag);
     if (variantFlag) args.push("--variant", variantFlag);
     args.push(runMessage);
@@ -651,6 +653,9 @@ async function handleMessage(msg) {
       try {
         const sid = lastSessionId || await getLastSession(dir);
         if (sid) {
+          sessionCache.set(actualDir, sid);
+          const sessions = await listSessions(dir);
+          send({ type: "sessions", sessions, current: sid, dir });
           let out;
           const dbPaths = config.statsDbPaths || [];
           if (isWin) {
