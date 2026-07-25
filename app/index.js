@@ -622,12 +622,10 @@ export default function ChatScreen() {
         onRequestClose={() => setShowSessionPicker(false)}
       >
         <View style={{ flex: 1, backgroundColor: C.cardAlt, paddingTop: insets.top }}>
-          <View style={styles.modalHeader}>
+          <TouchableOpacity style={styles.modalHeader} onPress={() => setShowSessionPicker(false)} activeOpacity={0.7}>
             <Text style={styles.modalTitle}>Sessions</Text>
-            <TouchableOpacity onPress={() => setShowSessionPicker(false)} activeOpacity={0.7}>
-              <Text style={styles.modalClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
+            <Text style={styles.modalClose}>Close</Text>
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <TouchableOpacity
               style={[styles.sessionItem, !currentSessionId && styles.sessionItemActive]}
@@ -666,12 +664,10 @@ export default function ChatScreen() {
         onRequestClose={() => setShowSettings(false)}
       >
         <View style={{ flex: 1, backgroundColor: C.cardAlt, paddingTop: insets.top }}>
-          <View style={styles.modalHeader}>
+          <TouchableOpacity style={styles.modalHeader} onPress={() => setShowSettings(false)} activeOpacity={0.7}>
             <Text style={styles.modalTitle}>Settings</Text>
-            <TouchableOpacity onPress={() => setShowSettings(false)} activeOpacity={0.7}>
-              <Text style={styles.modalClose}>Done</Text>
-            </TouchableOpacity>
-          </View>
+            <Text style={styles.modalClose}>Done</Text>
+          </TouchableOpacity>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}>
             <Text style={styles.sectionLabel}>Connection</Text>
               <View style={{ height: 8 }} />
