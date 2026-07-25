@@ -139,7 +139,7 @@ def main():
     parser.add_argument("--mode", choices=["win", "wsl"], required=True)
     parser.add_argument("--opencode", default="opencode")
     parser.add_argument("--startup-wait", type=int, default=20)
-    parser.add_argument("--compact-wait", type=int, default=60)
+    parser.add_argument("--compact-wait", type=int, default=45)
     args = parser.parse_args()
 
     stdout_fd = os.dup(1)
