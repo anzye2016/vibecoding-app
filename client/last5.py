@@ -35,6 +35,9 @@ for m in msgs:
     if r == "user":
         u_text = text
     elif r == "assistant" and u_text is not None:
-        rounds.append({"user": u_text, "assistant": text})
+        if rounds and rounds[-1]["user"] == u_text:
+            rounds[-1]["assistant"] += "\n\n" + text
+        else:
+            rounds.append({"user": u_text, "assistant": text})
 
 print(json.dumps(rounds[-30:]))
