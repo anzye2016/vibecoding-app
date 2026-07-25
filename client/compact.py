@@ -1,222 +1,196 @@
-"""compact.py — Open terminal, run opencode, send /compact, wait, close.
-
-Uses clipboard paste (pyperclip + pyautogui) for reliable text input.
-Closes gracefully via /exit -> exit -> exit (no process killing)."""
+"""compact.py — AllocConsole, launch shell, send /compact via WriteConsoleInput."""
 
 import sys
 import json
 import time
+import os
 import ctypes
 import ctypes.wintypes
 import subprocess
 import argparse
-import uuid
 
-user32 = ctypes.windll.user32
+k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-# ---------------------------------------------------------------------------
-# Window finding (ctypes + EnumWindows — works for all window classes)
-# ---------------------------------------------------------------------------
-_found_hwnd = 0
-_search_title = ""
-
-WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+STD_INPUT_HANDLE = -10
+STD_OUTPUT_HANDLE = -11
+KEY_EVENT = 1
+VK_RETURN = 0x0D
 
 
-@WNDENUMPROC
-def _enum_callback(hwnd, lparam):
-    global _found_hwnd
-    if not user32.IsWindowVisible(hwnd):
-        return True
-    if _search_title:
-        buf = ctypes.create_unicode_buffer(256)
-        user32.GetWindowTextW(hwnd, buf, 256)
-        if _search_title in buf.value:
-            _found_hwnd = hwnd
-            return False
+class SECURITY_ATTRIBUTES(ctypes.Structure):
+    _fields_ = [
+        ("nLength", ctypes.wintypes.DWORD),
+        ("lpSecurityDescriptor", ctypes.wintypes.LPVOID),
+        ("bInheritHandle", ctypes.wintypes.BOOL),
+    ]
+
+
+class KeyEventRecord(ctypes.Structure):
+    _fields_ = [
+        ("bKeyDown", ctypes.wintypes.BOOL),
+        ("wRepeatCount", ctypes.wintypes.WORD),
+        ("wVirtualKeyCode", ctypes.wintypes.WORD),
+        ("wVirtualScanCode", ctypes.wintypes.WORD),
+        ("uChar", ctypes.wintypes.WCHAR),
+        ("dwControlKeyState", ctypes.wintypes.DWORD),
+    ]
+
+
+class InputRecord(ctypes.Structure):
+    _fields_ = [
+        ("EventType", ctypes.wintypes.WORD),
+        ("Event", KeyEventRecord),
+    ]
+
+
+k32.AllocConsole.argtypes = []
+k32.AllocConsole.restype = ctypes.wintypes.BOOL
+k32.FreeConsole.argtypes = []
+k32.FreeConsole.restype = ctypes.wintypes.BOOL
+k32.SetConsoleTitleW.argtypes = [ctypes.wintypes.LPCWSTR]
+k32.SetConsoleTitleW.restype = ctypes.wintypes.BOOL
+k32.SetStdHandle.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.HANDLE]
+k32.SetStdHandle.restype = ctypes.wintypes.BOOL
+k32.WriteConsoleInputW.argtypes = [
+    ctypes.wintypes.HANDLE, ctypes.c_void_p, ctypes.wintypes.DWORD,
+    ctypes.POINTER(ctypes.wintypes.DWORD),
+]
+k32.WriteConsoleInputW.restype = ctypes.wintypes.BOOL
+k32.CreateFileW.argtypes = [
+    ctypes.wintypes.LPCWSTR, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD,
+    ctypes.POINTER(SECURITY_ATTRIBUTES), ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD, ctypes.wintypes.HANDLE,
+]
+k32.CreateFileW.restype = ctypes.wintypes.HANDLE
+
+
+def make_sa():
+    sa = SECURITY_ATTRIBUTES()
+    sa.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
+    sa.bInheritHandle = True
+    sa.lpSecurityDescriptor = None
+    return sa
+
+
+def con_open(name, access, share):
+    sa = make_sa()
+    return k32.CreateFileW(name, access, share, ctypes.byref(sa), 3, 0, None)
+
+
+def write_text(h_stdin, text, press_enter=True):
+    records = []
+    for ch in text:
+        records.append(InputRecord(KEY_EVENT, KeyEventRecord(True, 1, 0, 0, ch, 0)))
+        records.append(InputRecord(KEY_EVENT, KeyEventRecord(False, 1, 0, 0, ch, 0)))
+    arr = (InputRecord * len(records))(*records)
+    written = ctypes.wintypes.DWORD()
+    ok = k32.WriteConsoleInputW(h_stdin, arr, len(records), ctypes.byref(written))
+    if not (bool(ok) and written.value == len(records)):
+        return False
+    if press_enter:
+        time.sleep(0.15)
+        _send_enter(h_stdin)
     return True
 
 
-def find_window(title):
-    global _found_hwnd, _search_title
-    _found_hwnd = 0
-    _search_title = title
-    user32.EnumWindows(_enum_callback, 0)
-    return _found_hwnd
+def _send_enter(h_stdin):
+    """Send Enter via SendInput (hardware-level simulation)."""
+    u32 = ctypes.WinDLL("user32", use_last_error=True)
+    INPUT_KEYBOARD = 1
+    KEYEVENTF_KEYUP = 2
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [
+            ("wVk", ctypes.wintypes.WORD),
+            ("wScan", ctypes.wintypes.WORD),
+            ("dwFlags", ctypes.wintypes.DWORD),
+            ("time", ctypes.wintypes.DWORD),
+            ("dwExtraInfo", ctypes.c_void_p),
+        ]
+
+    class INPUT_U(ctypes.Union):
+        _fields_ = [("ki", KEYBDINPUT)]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.wintypes.DWORD),
+            ("u", INPUT_U),
+        ]
+
+    inp = (INPUT * 2)(
+        INPUT(INPUT_KEYBOARD, INPUT_U(KEYBDINPUT(VK_RETURN, 0, 0, 0, None))),
+        INPUT(INPUT_KEYBOARD, INPUT_U(KEYBDINPUT(VK_RETURN, 0, KEYEVENTF_KEYUP, 0, None))),
+    )
+    u32.SendInput(2, inp, ctypes.sizeof(INPUT))
+
+    # Also write VK_RETURN via WriteConsoleInput for readers that use ReadConsoleInputW
+    ir = (InputRecord * 2)(
+        InputRecord(KEY_EVENT, KeyEventRecord(True, 1, VK_RETURN, 0, '\r', 0)),
+        InputRecord(KEY_EVENT, KeyEventRecord(False, 1, VK_RETURN, 0, '\r', 0)),
+    )
+    written = ctypes.wintypes.DWORD()
+    k32.WriteConsoleInputW(h_stdin, ir, 2, ctypes.byref(written))
 
 
-def focus_window(hwnd, retries=3):
-    if not hwnd:
-        return False
-    for _ in range(retries):
-        fg = user32.GetForegroundWindow()
-        fg_tid = user32.GetWindowThreadProcessId(fg, None)
-        our_tid = user32.GetWindowThreadProcessId(hwnd, None)
-        if fg_tid != our_tid:
-            user32.AttachThreadInput(our_tid, fg_tid, True)
-        user32.BringWindowToTop(hwnd)
-        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-        user32.AllowSetForegroundWindow(-1)
-        user32.SetForegroundWindow(hwnd)
-        if fg_tid != our_tid:
-            user32.AttachThreadInput(our_tid, fg_tid, False)
-        time.sleep(0.3)
-        if user32.GetForegroundWindow() == hwnd:
-            return True
-    return False
-
-
-# ---------------------------------------------------------------------------
-# Keyboard input via clipboard paste
-# ---------------------------------------------------------------------------
-def type_line(text):
-    import pyperclip
-    import pyautogui
-
-    old = pyperclip.paste()
-    try:
-        pyperclip.copy(text)
-        time.sleep(0.05)
-        pyautogui.hotkey("ctrl", "v")
-        time.sleep(0.1)
-        pyautogui.press("enter")
-        time.sleep(0.3)
-    finally:
-        try:
-            pyperclip.copy(old)
-        except Exception:
-            pass
-
-
-# ---------------------------------------------------------------------------
-def close_terminal(hwnd, mode):
-    """Graceful close: /exit opencode, exit shell(s), no process killing."""
-    if not hwnd or not user32.IsWindow(hwnd):
-        return
-
-    if not focus_window(hwnd):
-        print("[compact] Focus failed, trying anyway...", file=sys.stderr)
-
-    time.sleep(0.3)
-
-    # Exit opencode
-    type_line("/exit")
-    time.sleep(2)
-
-    if not user32.IsWindow(hwnd):
-        return
-
-    # Exit shell
-    if not focus_window(hwnd):
-        print("[compact] Focus failed at exit 1, trying anyway...", file=sys.stderr)
-    type_line("exit")
-    time.sleep(1.5)
-
-    # WSL mode: one more exit (WSL bash -> PS -> close)
-    if mode == "wsl" and user32.IsWindow(hwnd):
-        if not focus_window(hwnd):
-            print("[compact] Focus failed at exit 2, trying anyway...", file=sys.stderr)
-        type_line("exit")
-        time.sleep(1.5)
-
-    # Fallback: WM_CLOSE
-    if user32.IsWindow(hwnd):
-        user32.PostMessageW(hwnd, 0x0010, 0, 0)
-
-
-# ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--mode", choices=["win", "wsl"], required=True)
     parser.add_argument("--opencode", default="opencode")
-    parser.add_argument("--startup-wait", type=int, default=30)
+    parser.add_argument("--startup-wait", type=int, default=20)
     parser.add_argument("--compact-wait", type=int, default=60)
     args = parser.parse_args()
 
-    try:
-        import pyperclip, pyautogui  # noqa: F401
-    except ImportError as e:
-        print(json.dumps({"success": False, "message": f"Missing dependency: {e}"}))
-        sys.exit(1)
-
-    unique_id = "VBCOMP-" + str(uuid.uuid4())[:8]
-    hwnd = 0
+    stdout_fd = os.dup(1)
+    def out(obj):
+        os.write(stdout_fd, (json.dumps(obj) + "\n").encode())
 
     try:
-        # 1. Launch terminal
-        title_cmd = f"$Host.UI.RawUI.WindowTitle='{unique_id}'"
-        if args.mode == "wsl":
-            cmd = f'start "" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "{title_cmd}; wsl"'
-        else:
-            cmd = f'start "" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "{title_cmd}"'
+        k32.FreeConsole()
+        if not k32.AllocConsole():
+            raise RuntimeError("AllocConsole failed")
+        k32.SetConsoleTitleW("VibeCoding Compact")
+
+        h_stdin = con_open("CONIN$", 0x80000000 | 0x40000000, 3)
+        h_stdout = con_open("CONOUT$", 0x40000000, 2)
+        INVALID = ctypes.c_void_p(-1).value
+        if h_stdin == INVALID or h_stdout == INVALID:
+            raise RuntimeError("CreateFile CON handle failed")
+
+        k32.SetStdHandle(STD_INPUT_HANDLE, h_stdin)
+        k32.SetStdHandle(STD_OUTPUT_HANDLE, h_stdout)
+        k32.SetStdHandle(-12, h_stdout)
+
+        time.sleep(0.5)
+
         subprocess.Popen(
-            cmd,
-            shell=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            ["powershell.exe", "-NoLogo", "-NoExit"],
+            creationflags=0,
         )
-        print(f"[compact] Launched, title={unique_id}", file=sys.stderr)
 
-        # 2. Find by unique title
-        time.sleep(2)
-        for _ in range(20):
-            hwnd = find_window(unique_id)
-            if hwnd:
-                break
-            time.sleep(0.5)
-
-        if not hwnd:
-            raise RuntimeError(f"Terminal window not found (title={unique_id})")
-
-        print(f"[compact] Window hwnd={hwnd}", file=sys.stderr)
-
-        # 3. Focus
-        if not focus_window(hwnd):
-            print("[compact] Warning: initial focus failed", file=sys.stderr)
-        time.sleep(0.5)
-
-        # 4. cd (belt-and-suspenders: terminal may not start in target dir)
-        focus_window(hwnd)
-        type_line(f'cd "{args.dir}"')
-        time.sleep(0.5)
-
-        # 5. opencode
-        oc_cmd = f"{args.opencode} -s {args.session}"
-        print(f"[compact] {oc_cmd}", file=sys.stderr)
-        focus_window(hwnd)
-        type_line(oc_cmd)
-
-        # 6. Wait for opencode TUI
-        print(f"[compact] Wait {args.startup_wait}s for opencode...", file=sys.stderr)
+        time.sleep(3)
+        write_text(h_stdin, f'cd "{args.dir}"')
+        time.sleep(1)
+        write_text(h_stdin, f'{args.opencode} -s {args.session}')
         time.sleep(args.startup_wait)
 
-        # 7. /compact
-        print("[compact] Sending /compact", file=sys.stderr)
-        focus_window(hwnd)
-        type_line("/compact")
-
-        # 8. Wait
-        print(f"[compact] Wait {args.compact_wait}s...", file=sys.stderr)
+        write_text(h_stdin, "/compact")
         time.sleep(args.compact_wait)
 
-        # 9. Close gracefully
-        print("[compact] Closing terminal", file=sys.stderr)
-        close_terminal(hwnd, args.mode)
+        write_text(h_stdin, "/exit")
+        time.sleep(5)
 
-        print(json.dumps({"success": True, "message": "Compact completed"}))
+        if args.mode == "wsl":
+            write_text(h_stdin, "exit")
+            time.sleep(2)
+        write_text(h_stdin, "exit")
+        time.sleep(3)
+
+        out({"success": True, "message": "Compact completed"})
 
     except Exception as e:
-        if hwnd:
-            try:
-                close_terminal(hwnd, args.mode)
-            except Exception:
-                pass
-
-        print(json.dumps({"success": False, "message": str(e)}))
-        sys.exit(1)
+        out({"success": False, "message": str(e)})
 
 
 if __name__ == "__main__":
