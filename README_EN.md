@@ -9,8 +9,7 @@ Phone App ←──WSS──→ your-domain.com:443 (nginx) ──WS──→ 12
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshot1.jpg" width="300" alt="VibeCoding">
-  <img src="assets/screenshot2.jpg" width="300" alt="VibeCoding">
+  <img src="assets/vibecoding-themes-row.png" width="100%" alt="VibeCoding 5 themes × dark/light mode">
 </p>
 
 ## Quick Start
@@ -207,10 +206,13 @@ Fill in Relay URL / Token / Room ID / Work Dir in settings. All values auto-save
 
 ### Display
 
-- Monospace text + code blocks (dark background, blue left border)
+- V2 Bold Modern UI: chat bubbles (user accent / assistant card)
+- 5 themes (Zinc / Slate / Forest / Rose / Amber) with dark/light mode
+- Custom colors (bg/text/accent/text2) and chat background image
+- Code blocks with blue left border; tables auto-wrap to screen width
 - `Thinking...` spinner while processing
-- Auto-loads last 10 rounds on first connect
-- Long-press to copy text
+- Auto-loads last 30 rounds on first connect
+- Settings panel: connection config, theme picker, color customization
 
 ## Security
 
