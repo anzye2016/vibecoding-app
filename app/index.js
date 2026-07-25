@@ -35,17 +35,17 @@ const THEME_PALETTES = {
   forest: {
     name: "Forest", desc: "森林绿 · 自然深邃",
     dark: { bg: "#052e16", text: "#f0fdf4", accent: "#22c55e", text2: "#86efac" },
-    light: { bg: "#f0fdf4", text: "#166534", accent: "#16a34a", text2: "#86efac" },
+    light: { bg: "#f0fdf4", text: "#166534", accent: "#16a34a", text2: "#4ade80" },
   },
   rose: {
     name: "Rose", desc: "玫瑰红 · 温暖大胆",
     dark: { bg: "#1f0a0c", text: "#fff1f2", accent: "#fb7185", text2: "#fda4af" },
-    light: { bg: "#fff1f2", text: "#881337", accent: "#e11d48", text2: "#fda4af" },
+    light: { bg: "#fff1f2", text: "#881337", accent: "#e11d48", text2: "#e11d48" },
   },
   amber: {
     name: "Amber", desc: "琥珀黄 · 温暖明亮",
     dark: { bg: "#1c1402", text: "#fffbeb", accent: "#fbbf24", text2: "#fde68a" },
-    light: { bg: "#fffbeb", text: "#78350f", accent: "#d97706", text2: "#fde68a" },
+    light: { bg: "#fffbeb", text: "#78350f", accent: "#d97706", text2: "#b45309" },
   },
 };
 
@@ -64,7 +64,7 @@ function buildPalette(p) {
     textBright: p.text,
     border: light ? `rgba(0,0,0,0.08)` : `rgba(255,255,255,0.08)`,
     input: light ? darken(p.bg, 6) : lighten(p.bg, 8),
-    placeholder: light ? lighten(p.text2, 60) : darken(p.text2, 40),
+    placeholder: light ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.35)",
     accentLight: light ? darken(p.accent, 10) : lighten(p.accent, 20),
     codeBg: light ? `rgba(0,0,0,0.04)` : `rgba(0,0,0,0.15)`,
     shadow: light ? "0 1px 3px rgba(0,0,0,0.04)" : "0 1px 3px rgba(0,0,0,0.2)",
@@ -191,7 +191,7 @@ export default function ChatScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const pendingQueue = useRef([]);
   const [themeName, setThemeName] = useState("zinc");
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const [customColors, setCustomColors] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [bgImage, setBgImage] = useState(null);
@@ -618,18 +618,17 @@ export default function ChatScreen() {
       <Modal
         visible={showSessionPicker}
         animationType="slide"
-        transparent={true}
+        transparent={false}
         onRequestClose={() => setShowSessionPicker(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowSessionPicker(false)} />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sessions</Text>
-              <TouchableOpacity onPress={() => setShowSessionPicker(false)} activeOpacity={0.7}>
-                <Text style={styles.modalClose}>Close</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={{ flex: 1, backgroundColor: C.cardAlt, paddingTop: insets.top }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Sessions</Text>
+            <TouchableOpacity onPress={() => setShowSessionPicker(false)} activeOpacity={0.7}>
+              <Text style={styles.modalClose}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1 }}>
             <TouchableOpacity
               style={[styles.sessionItem, !currentSessionId && styles.sessionItemActive]}
               onPress={() => selectSession(null, null)}
@@ -663,21 +662,18 @@ export default function ChatScreen() {
       <Modal
         visible={showSettings}
         animationType="slide"
-        transparent={true}
+        transparent={false}
         onRequestClose={() => setShowSettings(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowSettings(false)} />
-          <View style={{ backgroundColor: C.cardAlt, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "80%", paddingBottom: 40, minHeight: 300 }}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettings(false)} activeOpacity={0.7}>
-                <Text style={styles.modalClose}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 400 }}>
-              <View style={{ padding: 16 }}>
-              <Text style={styles.sectionLabel}>Connection</Text>
+        <View style={{ flex: 1, backgroundColor: C.cardAlt, paddingTop: insets.top }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Settings</Text>
+            <TouchableOpacity onPress={() => setShowSettings(false)} activeOpacity={0.7}>
+              <Text style={styles.modalClose}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}>
+            <Text style={styles.sectionLabel}>Connection</Text>
               <View style={{ height: 8 }} />
               <TextInput style={styles.setupInput} placeholder="Relay URL" placeholderTextColor={C.placeholder} value={relayUrl} onChangeText={setRelayUrl} autoCapitalize="none" autoCorrect={false} />
               <View style={{ height: 8 }} />
@@ -750,9 +746,7 @@ export default function ChatScreen() {
                   <Slider style={{ width: "100%", height: 32 }} minimumValue={0.01} maximumValue={1} step={0.01} value={bgOpacity} onValueChange={setBgOpacity} minimumTrackTintColor={C.accent} maximumTrackTintColor={C.border} thumbTintColor={C.accent} />
                 </View>
               )}
-              </View>
             </ScrollView>
-          </View>
         </View>
       </Modal>
     </View>
