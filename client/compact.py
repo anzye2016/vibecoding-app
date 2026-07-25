@@ -164,10 +164,13 @@ def main():
 
         time.sleep(0.5)
 
-        subprocess.Popen(
-            ["powershell.exe", "-NoLogo", "-NoExit"],
-            creationflags=0,
-        )
+        if args.mode == "wsl":
+            subprocess.Popen(["wsl.exe"], creationflags=0)
+        else:
+            subprocess.Popen(
+                ["powershell.exe", "-NoLogo", "-NoExit"],
+                creationflags=0,
+            )
 
         time.sleep(3)
         write_text(h_stdin, f'cd "{args.dir}"')
@@ -181,9 +184,6 @@ def main():
         write_text(h_stdin, "/exit")
         time.sleep(5)
 
-        if args.mode == "wsl":
-            write_text(h_stdin, "exit")
-            time.sleep(2)
         write_text(h_stdin, "exit")
         time.sleep(3)
 
