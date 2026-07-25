@@ -1,0 +1,23 @@
+{
+  "relayUrl": "wss://wxysyn.com/vibecoding/ws",
+  "relayOrigin": "https://wxysyn.com",
+  "relayHost": "127.0.0.1",
+  "relayPort": 8766,
+  "compactPython": "C:\\Users\\anzye\\projects\\screen-agent\\.venv\\Scripts\\python.exe",
+  "opencodeBinWsl": "/home/anzye/.npm-global/bin/opencode",
+  "statsDbPaths": [
+    "/home/anzye/.local/share/opencode/opencode.db",
+    "/mnt/c/Users/anzye/.local/share/opencode/opencode.db"
+  ],
+  "allowedDirs": [
+    "C:/Users/anzye/projects/",
+    "C:/Users/anzye/scripts/",
+    "C:/vibecoding-app/",
+    "C:/Users/anzye/github/",
+    "/home/anzye/projects/",
+    "/home/anzye/models/",
+    "/home/anzye/scripts/",
+    "/home/anzye/github/",
+    "/home/anzye/duckdb/"
+  ]
+}
