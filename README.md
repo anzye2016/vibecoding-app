@@ -9,8 +9,7 @@
 ## 截图
 
 <p align="center">
-  <img src="assets/screenshot1.jpg" width="300" alt="VibeCoding">
-  <img src="assets/screenshot2.jpg" width="300" alt="VibeCoding">
+  <img src="assets/vibecoding-themes-row.png" width="100%" alt="VibeCoding 5 主题 × 深色/浅色模式">
 </p>
 
 ## 快速开始
