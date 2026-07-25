@@ -514,7 +514,7 @@ export default function ChatScreen() {
           </View>
         </View>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
-          <Text style={styles.themeBtnText}>⚙</Text>
+          <Text style={styles.themeBtnText}>☰</Text>
         </TouchableOpacity>
       </View>
 
