@@ -207,6 +207,7 @@ export default function ChatScreen() {
   const wasEverConnected = useRef(false);
   const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
+  const longPressed = useRef(false);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -287,35 +288,35 @@ export default function ChatScreen() {
   }, [roomId]);
 
   useEffect(() => {
-    if (workDir) AsyncStorage.setItem(STORAGE_KEYS.DIR, workDir);
+    if (workDir) AsyncStorage.setItem(STORAGE_KEYS.DIR, workDir).catch(() => {});
   }, [workDir]);
 
   useEffect(() => {
-    if (relayUrl) AsyncStorage.setItem(STORAGE_KEYS.RELAY, relayUrl);
+    if (relayUrl) AsyncStorage.setItem(STORAGE_KEYS.RELAY, relayUrl).catch(() => {});
   }, [relayUrl]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify({ n: themeName, d: isDark }));
+    AsyncStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify({ n: themeName, d: isDark })).catch(() => {});
   }, [themeName, isDark]);
 
   useEffect(() => {
     if (customColors) {
-      AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_COLORS, JSON.stringify(customColors));
+      AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_COLORS, JSON.stringify(customColors)).catch(() => {});
     } else {
-      AsyncStorage.removeItem(STORAGE_KEYS.CUSTOM_COLORS);
+      AsyncStorage.removeItem(STORAGE_KEYS.CUSTOM_COLORS).catch(() => {});
     }
   }, [customColors]);
 
   useEffect(() => {
     if (bgImage) {
-      AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage);
+      AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage).catch(() => {});
     } else {
-      AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE);
+      AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE).catch(() => {});
     }
   }, [bgImage]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity));
+    AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity)).catch(() => {});
   }, [bgOpacity]);
 
   useEffect(() => {
@@ -325,15 +326,15 @@ export default function ChatScreen() {
   }, [loadHistory, workDir]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory));
+    AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory)).catch(() => {});
   }, [loadHistory]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats));
+    AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats)).catch(() => {});
   }, [showStats]);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs));
+    try { AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs)); } catch {}
   }, [quickDirs]);
 
   const addMessage = useCallback((msg) => {
@@ -838,14 +839,16 @@ export default function ChatScreen() {
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TouchableOpacity
                     style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
-                onPress={() => {
-                  if (!q.path) return;
-                  if (status !== "disconnected") disconnect();
-                  if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
-                  if (q.showStats !== undefined) setShowStats(q.showStats);
-                  connect(q.path);
-                }}
-                onLongPress={i === editingQuick ? undefined : () => setEditingQuick(i)}
+                    onPress={() => {
+                      if (longPressed.current) { longPressed.current = false; return; }
+                      if (!q.path) return;
+                      if (status !== "disconnected") disconnect();
+                      if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
+                      if (q.showStats !== undefined) setShowStats(q.showStats);
+                      setShowSettings(false);
+                      connect(q.path);
+                    }}
+                    onLongPress={() => { longPressed.current = true; setEditingQuick(i); }}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.connectBtnText} numberOfLines={1}>{q.name}</Text>
