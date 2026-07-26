@@ -209,6 +209,7 @@ export default function ChatScreen() {
   const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
   const longPressed = useRef(false);
+  const nearBottom = useRef(true);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -642,6 +643,14 @@ export default function ChatScreen() {
           ref={scrollRef}
           style={styles.output}
           contentContainerStyle={styles.outputContent}
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 120;
+          }}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            if (nearBottom.current) scrollRef.current?.scrollToEnd({ animated: false });
+          }}
           showsVerticalScrollIndicator={false}
         >
         {messages.length === 0 && (
