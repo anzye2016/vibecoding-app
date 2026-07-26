@@ -211,6 +211,7 @@ export default function ChatScreen() {
   const longPressed = useRef(false);
   const nearBottom = useRef(true);
   const pendingSessionRef = useRef(null);
+  const pendingSessionLabelRef = useRef(null);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -370,7 +371,7 @@ export default function ChatScreen() {
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
-    if (!dir) pendingSessionRef.current = null;
+    if (!dir) { pendingSessionRef.current = null; pendingSessionLabelRef.current = null; }
 
     // Capture intent before any side effects
     const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
@@ -416,12 +417,14 @@ export default function ChatScreen() {
       if (pendingSessionRef.current) {
         const ps = pendingSessionRef.current;
         pendingSessionRef.current = null;
+        if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDir }));
         if (loadHistory) {
           ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
         }
         ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
         setCurrentSessionId(ps.sessionId || null);
+        setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
         setMessages([]);
         historyLoadedRef.current = false;
@@ -511,7 +514,10 @@ export default function ChatScreen() {
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
           setCurrentSessionId(msg.current || null);
-          if (!msg.current) {
+          if (pendingSessionLabelRef.current) {
+            setSessionLabel(pendingSessionLabelRef.current);
+            pendingSessionLabelRef.current = null;
+          } else if (!msg.current) {
             setSessionLabel("(new)");
           } else {
             const cur = (msg.sessions || []).find(s => s.id === msg.current);
@@ -644,6 +650,7 @@ export default function ChatScreen() {
                   if (status !== "disconnected") disconnect();
                   if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                   if (q.showStats !== undefined) setShowStats(q.showStats);
+                  pendingSessionLabelRef.current = q.sessionLabel || null;
                   pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                   connect(q.path);
                 }}
@@ -894,7 +901,9 @@ export default function ChatScreen() {
                       if (status !== "disconnected") disconnect();
                       if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                       if (q.showStats !== undefined) setShowStats(q.showStats);
-                      pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
+                  pendingSessionLabelRef.current = q.sessionLabel || null;
+                  pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
+                  pendingSessionLabelRef.current = q.sessionLabel || null;
                       setShowSettings(false);
                       connect(q.path);
                     }}
