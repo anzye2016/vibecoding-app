@@ -671,7 +671,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.outputContent}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 1200;
+            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 120;
           }}
           scrollEventThrottle={100}
           onContentSizeChange={() => {
