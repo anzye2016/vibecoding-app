@@ -232,16 +232,6 @@ export default function MarkdownBlock({ text, C }) {
 }
 
 function markdownStyles(C) {
-  const isDark = (function(bg) {
-    const r=parseInt(bg.slice(1,3),16), g=parseInt(bg.slice(3,5),16), b=parseInt(bg.slice(5,7),16);
-    return r*0.299 + g*0.587 + b*0.114 <= 160;
-  })(C.bg);
-  const codeBg = isDark ? "#1a1a1a" : "#E8E8E8";
-  const codeColor = isDark ? "#93c5fd" : "#1d4ed8";
-  const linkColor = isDark ? "#60a5fa" : "#1d4ed8";
-  const blockBg = isDark ? "#111111" : "#F0EFEC";
-  const altBg = isDark ? "#111111" : "#F0EFEC";
-
   return StyleSheet.create({
   container: {
     paddingVertical: 2,
@@ -259,13 +249,13 @@ function markdownStyles(C) {
     fontStyle: "italic",
   },
   inlineCode: {
-    backgroundColor: codeBg,
-    color: codeColor,
+    backgroundColor: C.codeBg,
+    color: C.textBright,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 15,
   },
   link: {
-    color: linkColor,
+    color: C.accent,
     textDecorationLine: "underline",
   },
   h1: {
@@ -297,7 +287,8 @@ function markdownStyles(C) {
   },
   blockquote: {
     borderLeftWidth: 2,
-    borderLeftColor: C.placeholder,
+    borderLeftColor: C.accent,
+    backgroundColor: C.codeBg,
     paddingLeft: 12,
     marginVertical: 4,
   },
@@ -309,9 +300,9 @@ function markdownStyles(C) {
     fontStyle: "italic",
   },
   codeBlock: {
-    backgroundColor: blockBg,
+    backgroundColor: C.codeBg,
     borderLeftWidth: 2,
-    borderLeftColor: codeColor,
+    borderLeftColor: C.accent,
     padding: 10,
     marginVertical: 8,
     borderRadius: 6,
@@ -329,7 +320,7 @@ function markdownStyles(C) {
     flexDirection: "row",
   },
   tableRowAlt: {
-    backgroundColor: altBg,
+    backgroundColor: C.codeBg,
   },
   tableCell: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -339,10 +330,10 @@ function markdownStyles(C) {
     justifyContent: "center",
   },
   tableHeader: {
-    backgroundColor: codeBg,
+    backgroundColor: C.card,
   },
   tableHeaderText: {
-    color: codeColor,
+    color: C.accent,
     fontSize: 15,
     fontWeight: "600",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
