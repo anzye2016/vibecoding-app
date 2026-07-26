@@ -862,6 +862,7 @@ const useStyles = (C) => StyleSheet.create({
   },
   themeBtnText: {
     fontSize: 15,
+    color: C.textBright,
   },
   statusDot: {
     width: 8,
