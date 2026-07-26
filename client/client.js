@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { readFileSync, existsSync, writeFileSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -552,6 +552,31 @@ async function handleMessage(msg) {
   if (v) {
     variantFlag = v[1];
     runMessage = runMessage.slice(v[0].length).trim() || "hi";
+  }
+
+  const rn = runMessage.match(/^\/rename\s+(.+)/);
+  if (rn) {
+    const newTitle = rn[1].trim();
+    const sid = lastSessionId;
+    if (!sid) {
+      send({ type: "chunk", text: "[rename] No active session\n" });
+      send({ type: "done", code: 1 });
+      return;
+    }
+    const escaped = newTitle.replace(/'/g, "'\\''");
+    const sql = `UPDATE session SET title = '${escaped}' WHERE id = '${sid}'`;
+    try {
+      if (IS_LINUX) {
+        execSync(`opencode db "${sql}"`);
+      } else {
+        execSync(`opencode.cmd db "${sql}"`, { shell: true, cwd: actualDir });
+      }
+      send({ type: "chunk", text: `[rename] Session title changed to: ${newTitle}\n` });
+    } catch (e) {
+      send({ type: "chunk", text: `[rename] Failed: ${e.message}\n` });
+    }
+    send({ type: "done", code: 0 });
+    return;
   }
 
   const sessionArg = lastSessionId ? `-s "${lastSessionId}"` : "";
