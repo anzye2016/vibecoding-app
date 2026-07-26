@@ -210,6 +210,7 @@ export default function ChatScreen() {
   const doneTimerRef = useRef(null);
   const longPressed = useRef(false);
   const nearBottom = useRef(true);
+  const pendingSessionRef = useRef(null);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -408,6 +409,19 @@ export default function ChatScreen() {
         addMessage({ type: "status", text: "--- Connected ---" });
       }
       flushQueue();
+      if (pendingSessionRef.current) {
+        const ps = pendingSessionRef.current;
+        pendingSessionRef.current = null;
+        ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDir }));
+        if (loadHistory) {
+          ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
+        }
+        ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+        setCurrentSessionId(ps.sessionId || null);
+        setSessionLabel(ps.sessionLabel || "(new)");
+        setMessages([]);
+        historyLoadedRef.current = false;
+      }
     };
 
     ws.onclose = () => {
@@ -626,6 +640,7 @@ export default function ChatScreen() {
                   if (status !== "disconnected") disconnect();
                   if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                   if (q.showStats !== undefined) setShowStats(q.showStats);
+                  pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                   connect(q.path);
                 }}
                 activeOpacity={0.7}
@@ -875,6 +890,7 @@ export default function ChatScreen() {
                       if (status !== "disconnected") disconnect();
                       if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                       if (q.showStats !== undefined) setShowStats(q.showStats);
+                      pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                       setShowSettings(false);
                       connect(q.path);
                     }}
@@ -892,7 +908,7 @@ export default function ChatScreen() {
                 style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
                 onPress={() => {
                   if (quickDirs.length >= 20 || !workDir) return;
-                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats }]);
+                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats, sessionId: currentSessionId, sessionLabel }]);
                 }}
                 activeOpacity={0.7}
               >
