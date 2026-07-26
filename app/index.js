@@ -202,10 +202,11 @@ export default function ChatScreen() {
   const [bgOpacity, setBgOpacity] = useState(0.6);
   const [loadHistory, setLoadHistory] = useState(true);
   const [showStats, setShowStats] = useState(true);
+  const [quickDirs, setQuickDirs] = useState([]);
+  const [editingQuick, setEditingQuick] = useState(null);
   const wasEverConnected = useRef(false);
   const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
-  const [quickDirs, setQuickDirs] = useState([]);
 
   const basePalette = isDark ? THEME_PALETTES[themeName].dark : THEME_PALETTES[themeName].light;
   const palette = customColors ? { ...basePalette, ...customColors } : basePalette;
@@ -593,7 +594,12 @@ export default function ChatScreen() {
               <TouchableOpacity
                 key={i}
                 style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: q.path === workDir ? C.accent : C.card }}
-                onPress={() => { if (status !== "disconnected") disconnect(); connect(q.path || workDir); }}
+                onPress={() => {
+                  if (status !== "disconnected") disconnect();
+                  if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
+                  if (q.showStats !== undefined) setShowStats(q.showStats);
+                  connect(q.path);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={{ color: q.path === workDir ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
@@ -825,12 +831,19 @@ export default function ChatScreen() {
 
               <View style={{ height: 24 }} />
               <Text style={styles.sectionLabel}>Quick Launch</Text>
-              <View style={{ height: 8 }} />
+              <Text style={{ color: C.placeholder, fontSize: 11, marginTop: 2, marginBottom: 8 }}>Tap to connect, long-press to rename</Text>
               {quickDirs.map((q, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TouchableOpacity
                     style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
-                    onPress={() => { setShowSettings(false); connect(q.path); }}
+                    onPress={() => {
+                      if (status !== "disconnected") disconnect();
+                      if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
+                      if (q.showStats !== undefined) setShowStats(q.showStats);
+                      setShowSettings(false);
+                      connect(q.path);
+                    }}
+                    onLongPress={() => setEditingQuick(i)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.connectBtnText} numberOfLines={1}>{q.name}</Text>
@@ -844,7 +857,7 @@ export default function ChatScreen() {
                 style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
                 onPress={() => {
                   const name = "Quick" + (quickDirs.length + 1);
-                  setQuickDirs(prev => [...prev, { name, path: workDir }]);
+                  setQuickDirs(prev => [...prev, { name, path: workDir, loadHistory, showStats }]);
                 }}
                 activeOpacity={0.7}
               >
@@ -880,6 +893,47 @@ export default function ChatScreen() {
             </ScrollView>
         </View>
       </Modal>
+
+      {editingQuick !== null && (
+        <Modal transparent animationType="none" visible onRequestClose={() => setEditingQuick(null)}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEditingQuick(null)}>
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.4)" }}>
+              <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: C.cardAlt, borderRadius: 14, padding: 20, width: "80%" }}>
+                <Text style={{ color: C.textBright, fontSize: 16, fontWeight: "600", marginBottom: 12 }}>Edit Quick Dir</Text>
+                {["name", "path", "loadHistory", "showStats"].map(field => (
+                  <View key={field} style={{ marginBottom: 8 }}>
+                    {field === "loadHistory" || field === "showStats" ? (
+                      <TouchableOpacity
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 }}
+                        onPress={() => setQuickDirs(prev => prev.map((q, j) => j === editingQuick ? { ...q, [field]: !q[field] } : q))}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ color: C.text2, fontSize: 13 }}>{field === "loadHistory" ? "Load last 30 rounds" : "Show token usage"}</Text>
+                        <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: quickDirs[editingQuick]?.[field] ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}>
+                          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff", alignSelf: quickDirs[editingQuick]?.[field] ? "flex-end" : "flex-start" }} />
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      <TextInput
+                        style={[styles.setupInput, { marginTop: 4 }]}
+                        value={quickDirs[editingQuick]?.[field] || ""}
+                        onChangeText={(v) => setQuickDirs(prev => prev.map((q, j) => j === editingQuick ? { ...q, [field]: v } : q))}
+                        placeholder={field}
+                        placeholderTextColor={C.placeholder}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.accent, marginTop: 8 }]} onPress={() => setEditingQuick(null)} activeOpacity={0.7}>
+                  <Text style={styles.connectBtnText}>Done</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
