@@ -212,6 +212,7 @@ export default function ChatScreen() {
   const nearBottom = useRef(true);
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
+  const connSeq = useRef(0);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -370,6 +371,7 @@ export default function ChatScreen() {
 
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
+    connSeq.current++;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
     if (!dir) { pendingSessionRef.current = null; pendingSessionLabelRef.current = null; }
 
@@ -397,6 +399,7 @@ export default function ChatScreen() {
 
     ws.onopen = () => {
       if (wsRef.current !== ws) return;
+      ws._seq = connSeq.current;
       retryCount.current = 0;
       setStatus("connected");
       setShowSettings(false);
@@ -498,7 +501,7 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "history") {
-          if (historyLoadedRef.current) return;
+          if (historyLoadedRef.current || connSeq.current !== ws._seq) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
