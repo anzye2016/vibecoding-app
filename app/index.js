@@ -418,9 +418,9 @@ export default function ChatScreen() {
         const ps = pendingSessionRef.current;
         pendingSessionRef.current = null;
         if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
-        ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDir }));
+        ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
         if (loadHistory) {
-          ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
+          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
         }
         setCurrentSessionId(ps.sessionId || null);
         setMessages([]);
