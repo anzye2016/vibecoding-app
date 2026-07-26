@@ -1,31 +1,46 @@
-import json, sys, subprocess, os, time
+import json, sys, subprocess, os, time, sqlite3
 from collections import OrderedDict
 
 sid = sys.argv[1]
 cwd = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 
-def db(query):
-    try:
-        r = subprocess.run(["opencode.cmd", "db", query, "--format", "json"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
-    except FileNotFoundError:
-        r = subprocess.run(["opencode", "db", query, "--format", "json"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
-    return json.loads(r.stdout) if r.stdout.strip() else []
-
 t0 = time.time()
 
-# Get recent user + assistant messages (limit 200)
-msg_rows = db(f"SELECT id, data FROM message WHERE session_id = '{sid}' ORDER BY time_created DESC LIMIT 200")
-msg_ids = [r["id"] for r in msg_rows]
+# Get DB path from opencode (fast, just returns a path)
+try:
+    r = subprocess.run(["opencode.cmd", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
+except FileNotFoundError:
+    r = subprocess.run(["opencode", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
 
-# Get all parts for these messages
-parts_rows = []
-if msg_ids:
-    ids_str = ",".join("'" + i + "'" for i in msg_ids)
-    parts_rows = db(f"SELECT message_id, data FROM part WHERE message_id IN ({ids_str}) ORDER BY time_created ASC")
+db_path = r.stdout.strip()
+if not db_path or not os.path.exists(db_path):
+    print(json.dumps([]))
+    sys.exit(0)
+
+# Open SQLite directly
+conn = sqlite3.connect(db_path)
+conn.row_factory = sqlite3.Row
+c = conn.cursor()
+
+# Get recent user + assistant messages (limit 200)
+c.execute("SELECT id, data FROM message WHERE session_id = ? ORDER BY time_created DESC LIMIT 200", (sid,))
+msg_rows = c.fetchall()
+
+msg_ids = [r["id"] for r in msg_rows]
+if not msg_ids:
+    print(json.dumps([]))
+    sys.exit(0)
+
+# Get all parts for these messages (one query)
+placeholders = ",".join("?" * len(msg_ids))
+c.execute(f"SELECT message_id, data FROM part WHERE message_id IN ({placeholders}) ORDER BY time_created ASC", msg_ids)
+part_rows = c.fetchall()
+
+conn.close()
 
 # Group parts by message_id
 parts_by_msg = {}
-for p in parts_rows:
+for p in part_rows:
     mid = p["message_id"]
     if mid not in parts_by_msg:
         parts_by_msg[mid] = []
@@ -37,14 +52,18 @@ u_text = None
 
 for r in reversed(msg_rows):
     info = {}
-    try: info = json.loads(r["data"]) if isinstance(r["data"], str) else {}
-    except: pass
+    try:
+        info = json.loads(r["data"]) if isinstance(r["data"], str) else {}
+    except:
+        pass
     role = info.get("role", "")
     parts = parts_by_msg.get(r["id"], [])
     text = ""
     for pd in parts:
-        try: p = json.loads(pd) if isinstance(pd, str) else {}
-        except: continue
+        try:
+            p = json.loads(pd) if isinstance(pd, str) else {}
+        except:
+            continue
         t = p.get("type")
         if t == "text":
             text += "\n\n" + p.get("text", "")
@@ -66,5 +85,4 @@ for r in reversed(msg_rows):
             rounds.append({"user": u_text, "assistant": text})
 
 t = time.time() - t0
-print(json.dumps(rounds[-30:]), file=sys.stdout)
-print(f"[last_fast] {len(rounds)} rounds in {t:.1f}s", file=sys.stderr)
+print(json.dumps(rounds[-30:]))
