@@ -486,7 +486,7 @@ export default function ChatScreen() {
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
-            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
