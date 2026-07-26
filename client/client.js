@@ -1,4 +1,4 @@
-import { spawn, execSync } from "child_process";
+import { spawn, spawnSync, execSync } from "child_process";
 import { readFileSync, existsSync, writeFileSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -568,10 +568,12 @@ async function handleMessage(msg) {
     try {
       if (IS_LINUX) {
         execSync(`opencode db "${sql}"`, { shell: true });
-      } else if (actualDir.startsWith("/mnt/")) {
-        execSync(`"${OPENDCODE_BIN}" db "${sql}"`, { cwd: actualDir, windowsHide: true });
       } else {
-        execSync(`wsl opencode db "${sql}"`, { windowsHide: true });
+        const bin = actualDir.startsWith("/mnt/") ? OPENDCODE_BIN : "wsl";
+        const args = actualDir.startsWith("/mnt/") ? ["db", sql] : ["opencode", "db", sql];
+        const r = spawnSync(bin, args, { cwd: actualDir, windowsHide: true, encoding: "utf-8" });
+        if (r.error) throw r.error;
+        if (r.status !== 0) throw new Error(r.stderr?.trim() || `exit code ${r.status}`);
       }
       send({ type: "chunk", text: `[rename] Session title changed to: ${newTitle}\n` });
     } catch (e) {
