@@ -133,6 +133,8 @@ const STORAGE_KEYS = {
   CUSTOM_COLORS: "vibecoding_custom_colors",
   BG_IMAGE: "vibecoding_bg_image",
   BG_OPACITY: "vibecoding_bg_opacity",
+  LOAD_HISTORY: "vibecoding_load_history",
+  SHOW_STATS: "vibecoding_show_stats",
 };
 
 const DEFAULT_RELAY = "wss://localhost:8766/vibecoding/ws";
@@ -169,6 +171,7 @@ export default function ChatScreen() {
   useEffect(() => {
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
@@ -196,6 +199,11 @@ export default function ChatScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [bgImage, setBgImage] = useState(null);
   const [bgOpacity, setBgOpacity] = useState(0.6);
+  const [loadHistory, setLoadHistory] = useState(true);
+  const [showStats, setShowStats] = useState(true);
+  const wasEverConnected = useRef(false);
+  const donePendingRef = useRef(null);
+  const doneTimerRef = useRef(null);
 
   const basePalette = isDark ? THEME_PALETTES[themeName].dark : THEME_PALETTES[themeName].light;
   const palette = customColors ? { ...basePalette, ...customColors } : basePalette;
@@ -206,6 +214,12 @@ export default function ChatScreen() {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: text }));
     addMessage({ type: "user", text: `${text}` });
+    if (donePendingRef.current) {
+      if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+      const d = donePendingRef.current;
+      donePendingRef.current = null;
+      addMessage({ type: "status", text: d });
+    }
     setProcessing(true);
   };
 
@@ -253,6 +267,8 @@ export default function ChatScreen() {
       AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_COLORS).then((v) => { if (v) setCustomColors(JSON.parse(v)); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.BG_IMAGE).then((v) => { if (v) setBgImage(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.BG_OPACITY).then((v) => { if (v) setBgOpacity(parseFloat(v)); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.LOAD_HISTORY).then((v) => { if (v !== null) setLoadHistory(v === "true"); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.SHOW_STATS).then((v) => { if (v !== null) setShowStats(v === "true"); }).catch(() => {});
     } catch (_) {}
   }, []);
 
@@ -295,6 +311,14 @@ export default function ChatScreen() {
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity));
   }, [bgOpacity]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory));
+  }, [loadHistory]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats));
+  }, [showStats]);
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
@@ -353,10 +377,11 @@ export default function ChatScreen() {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      if (connIntent.current.auto) {
+      if (wasEverConnected.current) {
         if (connIntent.current.restoreProcessing) setProcessing(true);
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
+        wasEverConnected.current = true;
         setMessages([]);
         historyLoadedRef.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
@@ -387,7 +412,7 @@ export default function ChatScreen() {
         if (msg.type === "status") {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
-            if (!historyLoadedRef.current) {
+            if (loadHistory && !historyLoadedRef.current) {
               ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
             }
             ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
@@ -396,15 +421,38 @@ export default function ChatScreen() {
             setProcessing(false);
           }
         } else if (msg.type === "chunk") {
-          addMessage(msg);
+          if (donePendingRef.current) {
+            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+            if (showStats) addMessage({ type: "status", text: msg.text.trim() });
+            const d = donePendingRef.current;
+            donePendingRef.current = null;
+            addMessage({ type: "status", text: d });
+          } else if (!showStats && /^c=[\d,]+/.test(msg.text.trim())) {
+          } else {
+            addMessage(msg);
+          }
         } else if (msg.type === "done") {
           setProcessing(false);
-          addMessage({ type: "status", text: `--- Done (exit ${msg.code}) ---` });
+          if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+          donePendingRef.current = "--- Done ---";
+          doneTimerRef.current = setTimeout(() => {
+            const d = donePendingRef.current;
+            donePendingRef.current = null;
+            if (d) addMessage({ type: "status", text: d });
+          }, 5000);
         } else if (msg.type === "cancelled") {
           setProcessing(false);
+          if (donePendingRef.current) {
+            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+            donePendingRef.current = null;
+          }
           addMessage({ type: "status", text: "--- Cancelled ---" });
         } else if (msg.type === "error") {
           setProcessing(false);
+          if (donePendingRef.current) {
+            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+            donePendingRef.current = null;
+          }
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "processing") {
           setProcessing(true);
@@ -440,6 +488,7 @@ export default function ChatScreen() {
   const disconnect = () => {
     retryCount.current = 0;
     intentionalDisconnect.current = true;
+    wasEverConnected.current = false;
     if (pendingQueue.current.length > 0) {
       pendingQueue.current = [];
       setPendingCount(0);
@@ -491,7 +540,9 @@ export default function ChatScreen() {
       wsRef.current.send(JSON.stringify({ type: "select_session", sessionId: sessionId || null, dir: workDir }));
       setMessages([]);
       historyLoadedRef.current = false;
-      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+      if (loadHistory) {
+        wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+      }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
     }
     setSessionLabel(title || "(new)");
@@ -509,10 +560,13 @@ export default function ChatScreen() {
               {currentSessionId ? sessionLabel || "(unnamed)" : (status === "connected" ? roomId : "Disconnected")}
             </Text>
             <Text style={styles.headerSub}>
-              {status === "connected" ? "Connected · opencode" : status === "connecting" ? "Connecting..." : "Offline"}
+              {status === "connected" ? "Connected · " + workDir : status === "connecting" ? "Connecting..." : "Offline"}
             </Text>
           </View>
         </View>
+        <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
+          <Text style={[styles.themeBtnText, { color: C.text2 }]}>✕</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>☰</Text>
         </TouchableOpacity>
@@ -678,6 +732,28 @@ export default function ChatScreen() {
               <TextInput style={styles.setupInput} placeholder="Room ID" placeholderTextColor={C.placeholder} value={roomId} onChangeText={setRoomId} autoCapitalize="none" autoCorrect={false} />
               <View style={{ height: 8 }} />
               <TextInput style={styles.setupInput} placeholder="Work dir" placeholderTextColor={C.placeholder} value={workDir} onChangeText={setWorkDir} autoCapitalize="none" autoCorrect={false} />
+              <View style={{ height: 8 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: C.text2, fontSize: 12 }}>Load last 30 rounds</Text>
+                <TouchableOpacity
+                  style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: loadHistory ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}
+                  onPress={() => setLoadHistory(v => !v)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", alignSelf: loadHistory ? "flex-end" : "flex-start" }} />
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: 8 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: C.text2, fontSize: 12 }}>Show token usage</Text>
+                <TouchableOpacity
+                  style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: showStats ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}
+                  onPress={() => setShowStats(v => !v)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", alignSelf: showStats ? "flex-end" : "flex-start" }} />
+                </TouchableOpacity>
+              </View>
               <View style={{ height: 8 }} />
                 <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "connected" ? disconnect : connect} disabled={status === "connecting"} activeOpacity={0.8}>
                   <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Connecting..." : "Connect"}</Text>
