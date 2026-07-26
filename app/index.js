@@ -858,7 +858,7 @@ const useStyles = (C) => StyleSheet.create({
     justifyContent: "center",
     backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.text2,
   },
   themeBtnText: {
     fontSize: 15,
