@@ -134,6 +134,7 @@ const STORAGE_KEYS = {
   BG_OPACITY: "vibecoding_bg_opacity",
   LOAD_HISTORY: "vibecoding_load_history",
   SHOW_STATS: "vibecoding_show_stats",
+  QUICK_DIRS: "vibecoding_quick_dirs",
 };
 
 const DEFAULT_RELAY = "wss://localhost:8766/vibecoding/ws";
@@ -146,6 +147,7 @@ export default function ChatScreen() {
   const [token, setToken] = useState("");
   const [roomId, setRoomId] = useState("");
   const [workDir, setWorkDir] = useState("");
+  const workDirRef = useRef("");
   const [relayUrl, setRelayUrl] = useState("");
   const [status, setStatus] = useState("disconnected");
   const [processing, setProcessing] = useState(false);
@@ -203,6 +205,7 @@ export default function ChatScreen() {
   const wasEverConnected = useRef(false);
   const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
+  const [quickDirs, setQuickDirs] = useState([]);
 
   const basePalette = isDark ? THEME_PALETTES[themeName].dark : THEME_PALETTES[themeName].light;
   const palette = customColors ? { ...basePalette, ...customColors } : basePalette;
@@ -268,6 +271,7 @@ export default function ChatScreen() {
       AsyncStorage.getItem(STORAGE_KEYS.BG_OPACITY).then((v) => { if (v) setBgOpacity(parseFloat(v)); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.LOAD_HISTORY).then((v) => { if (v !== null) setLoadHistory(v === "true"); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.SHOW_STATS).then((v) => { if (v !== null) setShowStats(v === "true"); }).catch(() => {});
+      AsyncStorage.getItem(STORAGE_KEYS.QUICK_DIRS).then((v) => { if (v) try { setQuickDirs(JSON.parse(v)); } catch {} }).catch(() => {});
     } catch (_) {}
   }, []);
 
@@ -325,6 +329,10 @@ export default function ChatScreen() {
     AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats));
   }, [showStats]);
 
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs));
+  }, [quickDirs]);
+
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
       if (msg.type === "status" && (msg.text === "--- Connected ---" || msg.text === "--- PC online ---")) {
@@ -350,8 +358,9 @@ export default function ChatScreen() {
 
   /* ---- connection lifecycle ---- */
 
-  const connect = () => {
+  const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
+    if (dir) setWorkDir(dir);
 
     // Capture intent before any side effects
     const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
@@ -577,6 +586,22 @@ export default function ChatScreen() {
           <Text style={styles.themeBtnText}>☰</Text>
         </TouchableOpacity>
       </View>
+      {quickDirs.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: C.cardAlt, maxHeight: 36 }}>
+          <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 10, paddingVertical: 4 }}>
+            {quickDirs.map((q, i) => (
+              <TouchableOpacity
+                key={i}
+                style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: q.path === workDir ? C.accent : C.card }}
+                onPress={() => { if (status !== "disconnected") disconnect(); connect(q.path || workDir); }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: q.path === workDir ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      )}
 
       <View style={{ flex: 1 }}>
         {bgImage ? <Image source={{ uri: bgImage }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: bgOpacity }} resizeMode="cover" /> : null}
@@ -797,6 +822,34 @@ export default function ChatScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <View style={{ height: 24 }} />
+              <Text style={styles.sectionLabel}>Quick Launch</Text>
+              <View style={{ height: 8 }} />
+              {quickDirs.map((q, i) => (
+                <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <TouchableOpacity
+                    style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
+                    onPress={() => { setShowSettings(false); connect(q.path); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.connectBtnText} numberOfLines={1}>{q.name}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setQuickDirs(prev => prev.filter((_, j) => j !== i))} activeOpacity={0.6}>
+                    <Text style={{ color: C.placeholder, fontSize: 18 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
+                onPress={() => {
+                  const name = "Quick" + (quickDirs.length + 1);
+                  setQuickDirs(prev => [...prev, { name, path: workDir }]);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.connectBtnText, { color: C.text }]}>+ Add current dir</Text>
+              </TouchableOpacity>
 
               <View style={{ height: 24 }} />
               <Text style={styles.sectionLabel}>Custom Colors</Text>
