@@ -370,6 +370,7 @@ export default function ChatScreen() {
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
+    if (!dir) pendingSessionRef.current = null;
 
     // Capture intent before any side effects
     const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
@@ -394,6 +395,7 @@ export default function ChatScreen() {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return;
       retryCount.current = 0;
       setStatus("connected");
       setShowSettings(false);
