@@ -14,6 +14,7 @@ import {
   StatusBar,
   Alert,
   Image,
+  InteractionManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -486,7 +487,7 @@ export default function ChatScreen() {
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
-            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
+            InteractionManager.runAfterInteractions(() => scrollRef.current?.scrollToEnd({ animated: false }));
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
