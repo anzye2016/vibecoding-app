@@ -364,7 +364,7 @@ export default function ChatScreen() {
 
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
-    if (dir) { setWorkDir(dir); workDirRef.current = dir; }
+    if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
 
     // Capture intent before any side effects
     const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
@@ -817,7 +817,7 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
               <View style={{ height: 8 }} />
-                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "disconnected" ? connect : disconnect} activeOpacity={0.8}>
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "disconnected" ? () => connect() : disconnect} activeOpacity={0.8}>
                   <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Cancel" : "Connect"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => { if (status === "connected") setShowSessionPicker(true); else fetchSessionsTmp(); }} activeOpacity={0.7}>
