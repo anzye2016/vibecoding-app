@@ -498,6 +498,7 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "history") {
+          if (historyLoadedRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
