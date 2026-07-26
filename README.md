@@ -12,89 +12,96 @@
   <img src="assets/vibecoding-themes-row.png" width="100%" alt="VibeCoding 5 主题 × 深色/浅色模式">
 </p>
 
-## 快速开始
+## 安装部署
 
-1. **复制配置**：`cp config.example.json config.json`，修改为自己的路径
-2. **部署中继服务器** → 配置 Token 和 systemd → 启动
-3. **运行 PC 客户端** → 连接 relay
-4. **编译安装 App** → 填入连接信息
+### 1. 本地环境（Windows）
+
+```powershell
+scripts\setup.bat
+```
+
+自动完成：
+- 检查 Node.js / Python
+- `npm install`
+- 生成 `config.json`（从模板）
+- 生成 `client/.vibecoding-token`
+
+装完后编辑 `config.json`，填入 relay 地址：
+
+```json
+{
+  "relayUrl": "wss://你的域名.com/vibecoding/ws",
+  "relayOrigin": "https://你的域名.com"
+}
+```
+
+### 2. 中继服务器（Linux）
+
+把项目传到服务器后执行：
+
+```bash
+bash scripts/setup-server.sh 你的域名.com
+```
+
+自动完成：
+- 安装 Node.js
+- 部署 relay 到 `/opt/vibecoding-relay/`
+- 生成随机 Token
+- 创建 systemd 服务并启动
+- 配置 nginx WebSocket 代理
+- 配置 fail2ban 防爆破
+
+> 需要先配置好域名 SSL 证书（`certbot --nginx -d 你的域名.com`）。
+
+### 3. 同步 Token
+
+服务器运行后查看 token：
+
+```bash
+cat /opt/vibecoding-relay/tokens.env
+```
+
+把 `PC_TOKEN` 复制到本地 `client/.vibecoding-token`，`PHONE_TOKEN` 后面填到手机 App。
+
+### 4. 运行 PC 客户端
+
+```bash
+node client/client.js
+```
+
+支持开机自启，见下方"开机自启"章节。
+
+### 5. 编译安装 App
+
+```powershell
+npx expo prebuild --platform android
+cd android
+.\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
+```
+
+APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
+
+手机安装后打开，设置页填入：
+- **Relay URL**: `wss://你的域名.com/vibecoding/ws`
+- **Token**: 服务器的 `PHONE_TOKEN`
+- **Room ID**: `default`（与 PC 客户端一致）
+- **Work Dir**: 你项目的路径
 
 ## 目录结构
 
 ```
 vibecoding-app/
-├── config.example.json       配置模板（提交 git）
-├── config.json               实际配置（不提交，从模板创建）
+├── config.example.json       配置模板
+├── config.json               实际配置（不提交 git）
 ├── app/                      Expo Android 应用
-├── client/                   PC 客户端（Windows / Linux）
+├── client/                   PC 客户端
 ├── relay/                    中继服务器
-├── scripts/                  部署辅助脚本
-├── assets/                   图标、截图
-└── LICENSE
-```
-
-## 中继服务器
-
-部署在云服务器，systemd 管理。支持离线消息缓存（手机断线时自动缓冲最多 500 条，溢出丢弃最早消息，重连后补发）。
-
-### 生成 Token
-
-```bash
-openssl rand -hex 32  # PC 用
-openssl rand -hex 32  # Phone 用
-```
-
-### systemd 服务
-
-`/etc/systemd/system/vibecoding-relay.service`：
-
-```ini
-[Unit]
-Description=VibeCoding Relay Server
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/opt/vibecoding-relay
-ExecStart=/usr/bin/node server.js
-Restart=always
-RestartSec=5
-Environment=HOST=127.0.0.1
-Environment=PORT=8766
-Environment=ORIGIN=https://your-domain.com
-Environment=PC_TOKEN=your_pc_token_here
-Environment=PHONE_TOKEN=your_phone_token_here
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 部署
-
-```bash
-scp relay/package.json relay/server.js user@your-server:/opt/vibecoding-relay/
-ssh user@your-server "cd /opt/vibecoding-relay && npm install"
-sudo systemctl daemon-reload && sudo systemctl enable --now vibecoding-relay
-```
-
-### Nginx 反向代理
-
-配置好 SSL 后，运行 `relay/fix-nginx.py`（自动读取 config.json 中的域名）。
-
-```nginx
-location /vibecoding/ws {
-    proxy_pass http://127.0.0.1:8766/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection upgrade;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 86400s;
-    proxy_send_timeout 86400s;
-}
+├── scripts/
+│   ├── setup.bat             本地一键配置
+│   ├── setup-server.sh       服务器一键部署
+│   └── vibecoding-client-wrapper.ps1  守护脚本
+├── assets/
+└── README.md
 ```
 
 ## 认证机制
@@ -106,7 +113,7 @@ Token 通过 WebSocket 子协议（`Sec-WebSocket-Protocol`）传输，不经过
 | PC 端 | `RELAY_TOKEN` 环境变量 或 `client/.vibecoding-token` 文件 |
 | Phone 端 | App 设置页手动输入（AsyncStorage 自动保存） |
 
-连接 URL（不含 Token）：`wss://your-domain.com/vibecoding/ws/{room}/{role}`
+连接 URL（不含 Token）：`wss://你的域名.com/vibecoding/ws/{room}/{role}`
 
 ## 配置
 
@@ -126,14 +133,6 @@ Token 通过 WebSocket 子协议（`Sec-WebSocket-Protocol`）传输，不经过
 环境变量优先于配置文件。
 
 ## PC 客户端
-
-### 安装运行
-
-```bash
-cd client
-npm install
-node client.js
-```
 
 ### 环境变量
 
@@ -187,12 +186,32 @@ Register-ScheduledTask -TaskName "vibecoding-client" -Action $action -Trigger $t
 
 每次回复后显示：`c=上下文 o=输出 r=思考` 以及模型名称。
 
+## 中继服务器
+
+使用 `scripts/setup-server.sh` 一键部署后，systemd 管理。支持离线消息缓存（手机断线时自动缓冲最多 500 条，溢出丢弃最早消息，重连后补发）。
+
+### 手动部署参考
+
+```nginx
+location /vibecoding/ws {
+    proxy_pass http://127.0.0.1:8766/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+```
+
 ## App
 
 ### 编译
 
 ```powershell
-cd C:\vibecoding-app
 npx expo prebuild --platform android
 cd android
 .\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -x lintVitalAnalyzeRelease
@@ -211,7 +230,7 @@ APK 位置：`android/app/build/outputs/apk/release/app-release.apk`
 - 自定义颜色（背景/文字/强调/次要文字）和聊天背景图
 - 代码块蓝色左边框，表格自动换行适配屏幕
 - 处理中显示 Thinking... 旋转动画
-- 首次连接自动加载最近 30 轮历史
+- 首次连接自动加载最近 30 轮历史（可关闭）
 - 设置面板内嵌连接配置、主题切换、颜色自定义
 
 ## 安全
