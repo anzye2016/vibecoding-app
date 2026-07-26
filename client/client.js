@@ -254,34 +254,28 @@ async function getLastSession(dir) {
 
 async function loadHistory(dir, sessionId) {
   try {
+    const script = join(__dirname, "last_fast.py");
+    const pyBin = IS_LINUX ? "python3" : "python";
     let raw;
     const isWin = dir.match(/^[A-Za-z]:/);
-    let exportOut;
     if (isWin) {
-      exportOut = await runOpenCode(dir, ["export", sessionId]);
+      const r = spawnSync(pyBin, [script, sessionId, dir], { encoding: "utf-8", windowsHide: true });
+      raw = r.stdout;
     } else if (IS_LINUX) {
-      exportOut = await runOpenCode(dir, ["export", sessionId]);
+      const r = spawnSync(pyBin, [script, sessionId, dir], { encoding: "utf-8" });
+      raw = r.stdout;
     } else {
-      const safeDir = dir
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\$/g, '\\$')
-        .replace(/`/g, '\\`');
-      const ts = Date.now();
       const winTmp = (process.env.TEMP || process.env.TMPDIR || "/tmp").split("\\").join("/");
       const wslTmp = "/mnt/" + winTmp[0].toLowerCase() + winTmp.slice(2);
-      const fname = `/vibe-export-${ts}.json`;
-      await wsl(`cd "${safeDir}" && ${getOpenCode(dir)} export "${sessionId}" > "${wslTmp}${fname}" 2>/dev/null`);
-      try { exportOut = readFileSync(winTmp + fname, "utf-8"); } catch {}
-      try { await wsl(`rm -f "${wslTmp}${fname}"`); } catch {}
+      const fScript = "/mnt/c" + script.slice(2).replace(/\\/g, "/");
+      const cmd = `cd '${dir}' && python3 '${fScript}' '${sessionId}' '${dir}'`;
+      raw = await wsl(cmd);
     }
-    if (!exportOut) { console.warn("[client] loadHistory: export returned empty for", sessionId); return; }
-    raw = await pipeToPython(join(__dirname, "last5.py"), exportOut);
-    if (!raw) { console.warn("[client] loadHistory: python returned empty, sid:", sessionId); return; }
+    if (!raw || raw.trim() === "[]") { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
     send({ type: "history", rounds });
-    console.log(`[client] Sent ${rounds.length} history rounds`);
+    console.log(`[client] Sent ${rounds.length} history rounds (fast path)`);
   } catch (e) {
     console.error("[client] loadHistory error:", e.message);
   }
