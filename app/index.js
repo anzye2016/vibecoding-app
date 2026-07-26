@@ -67,7 +67,6 @@ function buildPalette(p) {
     placeholder: light ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.35)",
     accentLight: light ? darken(p.accent, 10) : lighten(p.accent, 20),
     codeBg: light ? `rgba(0,0,0,0.04)` : `rgba(0,0,0,0.15)`,
-    shadow: light ? "0 1px 3px rgba(0,0,0,0.04)" : "0 1px 3px rgba(0,0,0,0.2)",
   };
 }
 
@@ -87,7 +86,7 @@ function tryParseQuestion(text) {
   }
 }
 
-function QuestionBlock({ questionData, beforeText, onAnswer }) {
+function QuestionBlock({ questionData, beforeText, onAnswer, C }) {
   const [answered, setAnswered] = useState(false);
 
   const handleAnswer = (label) => {
@@ -97,24 +96,24 @@ function QuestionBlock({ questionData, beforeText, onAnswer }) {
   };
 
   return (
-    <View style={styles.questionContainer}>
+    <View style={{ marginVertical: 8 }}>
       {beforeText ? <MarkdownBlock text={beforeText} C={C} /> : null}
       {questionData.questions.map((q, qi) => {
         const options = Array.isArray(q.options) ? q.options : [];
         return (
-          <View key={qi} style={styles.questionGroup}>
-            {q.header ? <Text style={styles.questionHeader}>{q.header}</Text> : null}
-            {q.question ? <Text style={styles.questionText}>{q.question}</Text> : null}
+          <View key={qi} style={{ gap: 4 }}>
+            {q.header ? <Text style={{ color: "#facc15", fontSize: 13, fontWeight: "600", marginBottom: 2 }}>{q.header}</Text> : null}
+            {q.question ? <Text style={{ color: C.textBright, fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{q.question}</Text> : null}
             {options.map((opt, oi) => (
               <TouchableOpacity
                 key={oi}
-                style={[styles.optionBtn, answered && styles.optionBtnUsed]}
+                style={[{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 6 }, answered && { opacity: 0.5 }]}
                 onPress={() => handleAnswer(opt.label)}
                 activeOpacity={0.7}
                 disabled={answered}
               >
-                <Text style={styles.optionLabel}>{opt.label}</Text>
-                {opt.description ? <Text style={styles.optionDesc}>{opt.description}</Text> : null}
+                <Text style={{ color: C.accentLight, fontSize: 14, fontWeight: "500" }}>{opt.label}</Text>
+                {opt.description ? <Text style={{ color: C.text, fontSize: 12, marginTop: 3, lineHeight: 17 }}>{opt.description}</Text> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -566,13 +565,13 @@ export default function ChatScreen() {
             <Text style={styles.headerTitle} numberOfLines={1}>
               {currentSessionId ? sessionLabel || "(unnamed)" : (status === "connected" ? roomId : "Disconnected")}
             </Text>
-            <Text style={styles.headerSub}>
+            <Text style={styles.headerSub} numberOfLines={1}>
               {status === "connected" ? "Connected · " + workDir : status === "connecting" ? "Connecting..." : "Offline"}
             </Text>
           </View>
         </View>
         <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
-          <Text style={[styles.themeBtnText, { color: C.text2 }]}>✕</Text>
+          <Text style={styles.themeBtnText}>✕</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>☰</Text>
@@ -697,7 +696,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
             <FlatList
               data={sessions}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.id || Math.random().toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.sessionItem, currentSessionId === item.id && styles.sessionItemActive]}
@@ -708,7 +707,7 @@ export default function ChatScreen() {
                     {item.title || "(unnamed)"}
                   </Text>
                   <Text style={styles.sessionItemDate}>
-                    {new Date(item.updated).toLocaleDateString()}
+                    {item.updated ? new Date(item.updated).toLocaleDateString() : ""}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -762,8 +761,8 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
               <View style={{ height: 8 }} />
-                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "connected" ? disconnect : connect} disabled={status === "connecting"} activeOpacity={0.8}>
-                  <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Connecting..." : "Connect"}</Text>
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "disconnected" ? connect : disconnect} activeOpacity={0.8}>
+                  <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Cancel" : "Connect"}</Text>
                 </TouchableOpacity>
                 {status === "connected" && (
                   <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => setShowSessionPicker(true)} activeOpacity={0.7}>
@@ -1019,18 +1018,6 @@ const useStyles = (C) => StyleSheet.create({
     fontSize: 14,
     fontStyle: "italic",
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: C.cardAlt,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: "60%",
-    paddingBottom: 20,
-  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1070,47 +1057,6 @@ const useStyles = (C) => StyleSheet.create({
     color: C.placeholder,
     fontSize: 12,
     marginTop: 4,
-  },
-  questionContainer: {
-    marginVertical: 8,
-  },
-  questionGroup: {
-    gap: 4,
-  },
-  questionHeader: {
-    color: "#facc15",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  questionText: {
-    color: C.textBright,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 8,
-  },
-  optionBtn: {
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 6,
-  },
-  optionBtnUsed: {
-    opacity: 0.5,
-  },
-  optionLabel: {
-    color: C.accentLight,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  optionDesc: {
-    color: C.text,
-    fontSize: 12,
-    marginTop: 3,
-    lineHeight: 17,
   },
   sectionLabel: {
     color: C.text2,
