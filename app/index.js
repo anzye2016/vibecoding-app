@@ -486,6 +486,7 @@ export default function ChatScreen() {
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
@@ -566,6 +567,28 @@ export default function ChatScreen() {
     }
     setSessionLabel(title || "(new)");
     setCurrentSessionId(sessionId || null);
+  };
+
+  const fetchSessionsTmp = () => {
+    if (!roomId.trim() || !token.trim()) return;
+    const url = `${relayUrl || DEFAULT_RELAY}/${encodeURIComponent(roomId.trim())}/phone`;
+    const ws = new WebSocket(url, token.trim());
+    const t = setTimeout(() => { try { ws.close(); } catch {} }, 8000);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+    };
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "sessions") {
+          setSessions(msg.sessions || []);
+          setCurrentSessionId(msg.current || null);
+          clearTimeout(t);
+          ws.close();
+          setShowSessionPicker(true);
+        }
+      } catch {}
+    };
   };
 
   return (
@@ -798,11 +821,9 @@ export default function ChatScreen() {
                 <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "disconnected" ? connect : disconnect} activeOpacity={0.8}>
                   <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Cancel" : "Connect"}</Text>
                 </TouchableOpacity>
-                {status === "connected" && (
-                  <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => setShowSessionPicker(true)} activeOpacity={0.7}>
-                    <Text style={[styles.connectBtnText, { color: C.text }]}>Session: {sessionLabel}</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => { if (status === "connected") setShowSessionPicker(true); else fetchSessionsTmp(); }} activeOpacity={0.7}>
+                  <Text style={[styles.connectBtnText, { color: C.text }]}>Session: {sessionLabel}{status !== "connected" ? " (fetch)" : ""}</Text>
+                </TouchableOpacity>
 
               <View style={{ height: 24 }} />
               <Text style={styles.sectionLabel}>Theme</Text>
