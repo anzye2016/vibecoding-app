@@ -571,7 +571,7 @@ async function handleMessage(msg) {
       } else {
         const bin = actualDir.startsWith("/mnt/") ? OPENDCODE_BIN : "wsl";
         const args = actualDir.startsWith("/mnt/") ? ["db", sql] : ["opencode", "db", sql];
-        const r = spawnSync(bin, args, { cwd: actualDir, windowsHide: true, encoding: "utf-8" });
+        const r = spawnSync(bin, args, { windowsHide: true, encoding: "utf-8" });
         if (r.error) throw r.error;
         if (r.status !== 0) throw new Error(r.stderr?.trim() || `exit code ${r.status}`);
       }
