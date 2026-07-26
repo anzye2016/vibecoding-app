@@ -148,7 +148,6 @@ export default function ChatScreen() {
   const [roomId, setRoomId] = useState("");
   const [workDir, setWorkDir] = useState("");
   const workDirRef = useRef("");
-  const workDirRef = useRef("");
   const [relayUrl, setRelayUrl] = useState("");
   const [status, setStatus] = useState("disconnected");
   const [processing, setProcessing] = useState(false);
