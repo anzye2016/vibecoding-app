@@ -567,9 +567,11 @@ async function handleMessage(msg) {
     const sql = `UPDATE session SET title = '${escaped}' WHERE id = '${sid}'`;
     try {
       if (IS_LINUX) {
-        execSync(`opencode db "${sql}"`);
+        execSync(`opencode db "${sql}"`, { shell: true });
+      } else if (actualDir.startsWith("/mnt/")) {
+        execSync(`"${OPENDCODE_BIN}" db "${sql}"`, { cwd: actualDir, windowsHide: true });
       } else {
-        execSync(`opencode.cmd db "${sql}"`, { shell: true, cwd: actualDir });
+        execSync(`wsl opencode db "${sql}"`, { windowsHide: true });
       }
       send({ type: "chunk", text: `[rename] Session title changed to: ${newTitle}\n` });
     } catch (e) {
