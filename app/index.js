@@ -641,7 +641,6 @@ export default function ChatScreen() {
           ref={scrollRef}
           style={styles.output}
           contentContainerStyle={styles.outputContent}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
         {messages.length === 0 && (
