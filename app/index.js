@@ -148,6 +148,7 @@ export default function ChatScreen() {
   const [roomId, setRoomId] = useState("");
   const [workDir, setWorkDir] = useState("");
   const workDirRef = useRef("");
+  const workDirRef = useRef("");
   const [relayUrl, setRelayUrl] = useState("");
   const [status, setStatus] = useState("disconnected");
   const [processing, setProcessing] = useState(false);
@@ -207,6 +208,8 @@ export default function ChatScreen() {
   const wasEverConnected = useRef(false);
   const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
+
+  useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
   const basePalette = isDark ? THEME_PALETTES[themeName].dark : THEME_PALETTES[themeName].light;
   const palette = customColors ? { ...basePalette, ...customColors } : basePalette;
@@ -361,7 +364,7 @@ export default function ChatScreen() {
 
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
-    if (dir) setWorkDir(dir);
+    if (dir) { setWorkDir(dir); workDirRef.current = dir; }
 
     // Capture intent before any side effects
     const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
@@ -836,14 +839,14 @@ export default function ChatScreen() {
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TouchableOpacity
                     style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
-                    onPress={() => {
-                      if (status !== "disconnected") disconnect();
-                      if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
-                      if (q.showStats !== undefined) setShowStats(q.showStats);
-                      setShowSettings(false);
-                      connect(q.path);
-                    }}
-                    onLongPress={() => setEditingQuick(i)}
+                onPress={() => {
+                  if (!q.path) return;
+                  if (status !== "disconnected") disconnect();
+                  if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
+                  if (q.showStats !== undefined) setShowStats(q.showStats);
+                  connect(q.path);
+                }}
+                onLongPress={i === editingQuick ? undefined : () => setEditingQuick(i)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.connectBtnText} numberOfLines={1}>{q.name}</Text>
@@ -856,8 +859,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
                 onPress={() => {
-                  const name = "Quick" + (quickDirs.length + 1);
-                  setQuickDirs(prev => [...prev, { name, path: workDir, loadHistory, showStats }]);
+                  if (quickDirs.length >= 20 || !workDir) return;
+                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats }]);
                 }}
                 activeOpacity={0.7}
               >
@@ -917,7 +920,7 @@ export default function ChatScreen() {
                       <TextInput
                         style={[styles.setupInput, { marginTop: 4 }]}
                         value={quickDirs[editingQuick]?.[field] || ""}
-                        onChangeText={(v) => setQuickDirs(prev => prev.map((q, j) => j === editingQuick ? { ...q, [field]: v } : q))}
+                        onChangeText={(v) => setQuickDirs(prev => prev.map((q, j) => j === editingQuick ? { ...q, [field]: field === "name" ? v.slice(0, 20) : v } : q))}
                         placeholder={field}
                         placeholderTextColor={C.placeholder}
                         autoCapitalize="none"
