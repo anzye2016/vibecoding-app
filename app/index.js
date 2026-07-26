@@ -229,6 +229,8 @@ export default function ChatScreen() {
       donePendingRef.current = null;
       addMessage({ type: "status", text: d });
     }
+    nearBottom.current = true;
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
     setProcessing(true);
   };
 
@@ -660,7 +662,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.outputContent}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 120;
+            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 1200;
           }}
           scrollEventThrottle={100}
           onContentSizeChange={() => {
