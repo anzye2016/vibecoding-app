@@ -220,9 +220,9 @@ export default function ChatScreen() {
   const C = useMemo(() => buildPalette(palette), [palette]);
   const styles = useMemo(() => useStyles(C), [C]);
 
-  const doSend = (text) => {
+  const doSend = (text, dir) => {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
-    wsRef.current.send(JSON.stringify({ type: "msg", dir: workDir, msg: text }));
+    wsRef.current.send(JSON.stringify({ type: "msg", dir: dir || workDir, msg: text }));
     addMessage({ type: "user", text: `${text}` });
     if (donePendingRef.current) {
       if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
@@ -236,7 +236,7 @@ export default function ChatScreen() {
   };
 
   const enqueue = (text) => {
-    pendingQueue.current.push(text);
+    pendingQueue.current.push({ text, dir: workDirRef.current });
     setPendingCount(pendingQueue.current.length);
   };
 
@@ -245,8 +245,8 @@ export default function ChatScreen() {
     if (q.length === 0) return;
     pendingQueue.current = [];
     setPendingCount(0);
-    for (const text of q) {
-      doSend(text);
+    for (const item of q) {
+      doSend(item.text, item.dir);
     }
   };
 
@@ -422,7 +422,6 @@ export default function ChatScreen() {
         if (loadHistory) {
           ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
         }
-        ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
         setCurrentSessionId(ps.sessionId || null);
         setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
