@@ -313,6 +313,12 @@ export default function ChatScreen() {
   }, [bgOpacity]);
 
   useEffect(() => {
+    if (loadHistory && wsRef.current?.readyState === 1 && !historyLoadedRef.current) {
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+    }
+  }, [loadHistory, workDir]);
+
+  useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory));
   }, [loadHistory]);
 
@@ -373,6 +379,7 @@ export default function ChatScreen() {
     ws.onopen = () => {
       retryCount.current = 0;
       setStatus("connected");
+      setShowSettings(false);
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
