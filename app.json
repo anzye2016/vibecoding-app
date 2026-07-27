@@ -22,7 +22,8 @@
       "package": "com.vibecoding.app"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "./plugins/withSplashFix"
     ],
     "experiments": {
       "typedRoutes": true
