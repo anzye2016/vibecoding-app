@@ -434,7 +434,7 @@ export default function ChatScreen() {
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
       }
-      ws.send(JSON.stringify({ type: "status_query" }));
+      ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current }));
       flushQueue();
     };
 
