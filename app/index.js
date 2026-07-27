@@ -508,6 +508,7 @@ export default function ChatScreen() {
     setProcessing(false);
     setCurrentSessionId(null);
     currentSessionIdRef.current = null;
+    setSessionLabel("(auto)");
   };
 
   const sendMessage = () => {
