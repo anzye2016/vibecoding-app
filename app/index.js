@@ -363,6 +363,7 @@ export default function ChatScreen() {
       setStatus("connected");
       connectedDirRef.current = workDirRef.current;
       setShowSettings(false);
+      historyLoadedRef.current = false;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -596,6 +597,7 @@ export default function ChatScreen() {
     if (wsRef.current && wsRef.current.readyState === 1) {
       const key = workDir + "::" + (currentSessionIdRef.current || "");
       messagesCache.current.delete(key);
+      historyLoadedRef.current = false;
       pendingHistoryDirRef.current = workDir;
       pendingHistorySessionRef.current = currentSessionIdRef.current;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
@@ -642,7 +644,7 @@ export default function ChatScreen() {
           </View>
         </View>
         <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
-          <Text style={styles.themeBtnText}>⟳</Text>
+          <Text style={styles.themeBtnText}>F</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { const k = workDir + "::" + (currentSessionIdRef.current || ""); messagesCache.current.delete(k); setMessages([]); }} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>✕</Text>
