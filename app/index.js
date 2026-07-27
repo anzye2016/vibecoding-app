@@ -553,6 +553,7 @@ export default function ChatScreen() {
     }
     setStatus("disconnected");
     setProcessing(false);
+    setCurrentSessionId(null);
   };
 
   const sendMessage = () => {
@@ -659,6 +660,7 @@ export default function ChatScreen() {
                   if (q.showStats !== undefined) setShowStats(q.showStats);
                   pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
                   pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
+                  setCurrentSessionId(q.sessionId || null);
                   connect(q.path);
                 }}
                 activeOpacity={0.7}
