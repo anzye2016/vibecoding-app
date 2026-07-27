@@ -447,10 +447,10 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
-    processingTabId = "";
     compactChild = null;
     send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` });
     send({ type: "done", code: 0 });
+    processingTabId = "";
     return;
   }
 
@@ -764,8 +764,8 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
-    processingTabId = "";
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
+    processingTabId = "";
   });
 }
 
@@ -822,8 +822,8 @@ function cancelCurrent() {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
-    processingTabId = "";
     send({ type: "cancelled" });
+    processingTabId = "";
   }
   if (compactChild) {
     try {
