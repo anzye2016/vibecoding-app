@@ -649,7 +649,10 @@ export default function ChatScreen() {
             {quickDirs.map((q, i) => (
               <TouchableOpacity
                 key={i}
-                style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: q.path === workDir ? C.accent : C.card }}
+                style={{
+                  paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
+                  backgroundColor: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? C.accent : C.card
+                }}
                 onPress={() => {
                   if (status !== "disconnected") disconnect();
                   if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
@@ -660,7 +663,7 @@ export default function ChatScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={{ color: q.path === workDir ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
+                <Text style={{ color: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
