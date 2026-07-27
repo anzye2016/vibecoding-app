@@ -323,7 +323,16 @@ export default function ChatScreen() {
   const connect = (dir) => {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
-    if (!dir) { pendingSessionRef.current = null; pendingSessionLabelRef.current = null; }
+    if (!dir) {
+      const m = quickDirs.find(q => q.path === workDir);
+      if (m && m.sessionId) {
+        pendingSessionRef.current = { sessionId: m.sessionId, sessionLabel: m.sessionLabel };
+        pendingSessionLabelRef.current = m.sessionLabel && m.sessionLabel !== "(auto)" && m.sessionLabel !== "(new)" ? m.sessionLabel : null;
+      } else {
+        pendingSessionRef.current = null;
+        pendingSessionLabelRef.current = null;
+      }
+    }
 
     // Capture intent before any side effects
     restoreProcessingRef.current = !intentionalDisconnect.current && historyLoadedRef.current && processing;
