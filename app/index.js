@@ -14,7 +14,6 @@ import {
   StatusBar,
   Alert,
   Image,
-  InteractionManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -234,7 +233,7 @@ export default function ChatScreen() {
       addMessage({ type: "status", text: d });
     }
     nearBottom.current = true;
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
     setProcessing(true);
   };
 
@@ -258,7 +257,7 @@ export default function ChatScreen() {
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", (e) => {
       setKbHeight(e.endCoordinates.height);
-      scrollRef.current?.scrollToEnd({ animated: true });
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
     });
     const hide = Keyboard.addListener("keyboardDidHide", () => {
       setKbHeight(0);
@@ -525,7 +524,7 @@ export default function ChatScreen() {
               addMessage({ type: "history-assistant", text: r.assistant });
             });
             addMessage({ type: "status", text: "--- History loaded ---" });
-            InteractionManager.runAfterInteractions(() => scrollRef.current?.scrollToEnd({ animated: false }));
+            requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
@@ -699,7 +698,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.outputContent}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 120;
+            nearBottom.current = (contentOffset.y + layoutMeasurement.height) >= contentSize.height - 240;
           }}
           scrollEventThrottle={100}
           onContentSizeChange={() => {
