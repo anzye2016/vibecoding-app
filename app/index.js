@@ -624,7 +624,7 @@ export default function ChatScreen() {
       wsRef.current.send(JSON.stringify({ type: "list_sessions", tabId: q.tabId, dir: q.path }));
     }
     if (!wsRef.current || wsRef.current.readyState !== 1) {
-      if (!tabMessages.current.has(q.tabId) && q.sessionId) autoLoadHistoryRef.current = true;
+      if (!tabMessages.current.has(q.tabId)) autoLoadHistoryRef.current = true;
       pendingSessionRef.current = { sessionId: q.sessionId, sessionLabel: q.sessionLabel, tabId: q.tabId };
       pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
       connect(q.path);
