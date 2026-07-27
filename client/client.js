@@ -636,6 +636,7 @@ async function handleMessage(msg) {
 
   // Kill any previous running task before starting a new one
   if (currentChild) {
+    const cancelledTabId = processingTabId;
     try {
       if (IS_LINUX) {
         process.kill(-currentChild.pid, "SIGTERM");
@@ -650,6 +651,9 @@ async function handleMessage(msg) {
     processingDir = null;
     processingSessionId = null;
     processingTabId = "";
+    if (cancelledTabId) {
+      send({ type: "cancelled" }, cancelledTabId);
+    }
   }
 
   let child;
