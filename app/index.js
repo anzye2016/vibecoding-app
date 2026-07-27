@@ -702,7 +702,6 @@ export default function ChatScreen() {
           scrollEventThrottle={100}
           onContentSizeChange={() => {
             if (nearBottom.current) {
-              scrollRef.current?.scrollToEnd({ animated: false });
               setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
             }
           }}
