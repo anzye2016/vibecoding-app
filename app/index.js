@@ -132,7 +132,6 @@ const STORAGE_KEYS = {
   CUSTOM_COLORS: "vibecoding_custom_colors",
   BG_IMAGE: "vibecoding_bg_image",
   BG_OPACITY: "vibecoding_bg_opacity",
-  LOAD_HISTORY: "vibecoding_load_history",
   SHOW_STATS: "vibecoding_show_stats",
   QUICK_DIRS: "vibecoding_quick_dirs",
 };
@@ -200,7 +199,6 @@ export default function ChatScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [bgImage, setBgImage] = useState(null);
   const [bgOpacity, setBgOpacity] = useState(0.6);
-  const [loadHistory, setLoadHistory] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [quickDirs, setQuickDirs] = useState([]);
   const [editingQuick, setEditingQuick] = useState(null);
@@ -210,6 +208,8 @@ export default function ChatScreen() {
   const nearBottom = useRef(true);
   const scrollTimerRef = useRef(null);
   const connectedDirRef = useRef("");
+  const historyLoadedDirs = useRef(new Set());
+  const autoLoadHistoryRef = useRef(false);
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const pendingHistoryDirRef = useRef("");
@@ -280,7 +280,6 @@ export default function ChatScreen() {
       AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_COLORS).then((v) => { if (v) setCustomColors(JSON.parse(v)); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.BG_IMAGE).then((v) => { if (v) setBgImage(v); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.BG_OPACITY).then((v) => { if (v) setBgOpacity(parseFloat(v)); }).catch(() => {});
-      AsyncStorage.getItem(STORAGE_KEYS.LOAD_HISTORY).then((v) => { if (v !== null) setLoadHistory(v === "true"); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.SHOW_STATS).then((v) => { if (v !== null) setShowStats(v === "true"); }).catch(() => {});
       AsyncStorage.getItem(STORAGE_KEYS.QUICK_DIRS).then((v) => { if (v) try { setQuickDirs(JSON.parse(v)); } catch {} }).catch(() => {});
     } catch (_) {}
@@ -297,10 +296,9 @@ export default function ChatScreen() {
     if (bgImage) AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage).catch(() => {});
     else AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE).catch(() => {});
     AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity)).catch(() => {});
-    AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory)).catch(() => {});
     AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats)).catch(() => {});
     try { AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs)).catch(() => {}); } catch {}
-  }, [token, roomId, workDir, relayUrl, themeName, isDark, customColors, bgImage, bgOpacity, loadHistory, showStats, quickDirs]);
+  }, [token, roomId, workDir, relayUrl, themeName, isDark, customColors, bgImage, bgOpacity, showStats, quickDirs]);
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
@@ -363,8 +361,6 @@ export default function ChatScreen() {
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
         wasEverConnected.current = true;
-        setMessages([]);
-        historyLoadedRef.current = false;
         addMessage({ type: "status", text: "--- Connected ---" });
       }
       if (pendingSessionRef.current) {
@@ -374,11 +370,11 @@ export default function ChatScreen() {
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
         setCurrentSessionId(ps.sessionId || null);
         currentSessionIdRef.current = ps.sessionId || null;
-        setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
       }
-      if (loadHistory) {
+      if (autoLoadHistoryRef.current) {
+        autoLoadHistoryRef.current = false;
         pendingHistoryDirRef.current = workDirRef.current;
         pendingHistorySessionRef.current = currentSessionIdRef.current;
         ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
@@ -410,11 +406,6 @@ export default function ChatScreen() {
         if (msg.type === "status") {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
-            if (loadHistory && !historyLoadedRef.current) {
-              pendingHistoryDirRef.current = workDirRef.current;
-              pendingHistorySessionRef.current = currentSessionIdRef.current;
-          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
-            }
             ws.send(JSON.stringify({ type: "list_sessions", dir: workDirRef.current }));
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
@@ -449,7 +440,7 @@ export default function ChatScreen() {
         } else if (msg.type === "processing_state") {
           if (msg.active === false) setProcessing(false);
           else if (!msg.dir || msg.dir === workDirRef.current) {
-            if (!msg.sessionId || msg.sessionId === currentSessionIdRef.current) setProcessing(true);
+            if (!msg.sessionId || !currentSessionIdRef.current || msg.sessionId === currentSessionIdRef.current) setProcessing(true);
           }
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
@@ -545,12 +536,11 @@ export default function ChatScreen() {
       wsRef.current.send(JSON.stringify({ type: "select_session", sessionId: sessionId || null, dir: workDir }));
       setMessages([]);
       historyLoadedRef.current = false;
-      if (loadHistory) {
-        pendingHistoryDirRef.current = workDir;
-        pendingHistorySessionRef.current = sessionId || null;
+      pendingHistoryDirRef.current = workDir;
+      pendingHistorySessionRef.current = sessionId || null;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: sessionId || null }));
-      }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+      historyLoadedDirs.current.add(workDir);
     }
     setSessionLabel(title || "(new)");
     setCurrentSessionId(sessionId || null);
@@ -560,13 +550,25 @@ export default function ChatScreen() {
   const switchToQuickDir = (q) => {
     if (!q.path) return;
     if (status !== "disconnected") disconnect();
-    if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
     if (q.showStats !== undefined) setShowStats(q.showStats);
+    if (!historyLoadedDirs.current.has(q.path)) {
+      historyLoadedDirs.current.add(q.path);
+      autoLoadHistoryRef.current = true;
+    }
     pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
     pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
     setCurrentSessionId(q.sessionId || null);
     currentSessionIdRef.current = q.sessionId || null;
     connect(q.path);
+  };
+
+  const refreshHistory = () => {
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      pendingHistoryDirRef.current = workDir;
+      pendingHistorySessionRef.current = currentSessionIdRef.current;
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
+      historyLoadedDirs.current.add(workDir);
+    }
   };
 
   const fetchSessionsTmp = () => {
@@ -609,6 +611,9 @@ export default function ChatScreen() {
         </View>
         <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>✕</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
+          <Text style={styles.themeBtnText}>↻</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>☰</Text>
@@ -806,17 +811,6 @@ export default function ChatScreen() {
               <TextInput style={styles.setupInput} placeholder="Work dir" placeholderTextColor={C.placeholder} value={workDir} onChangeText={setWorkDir} autoCapitalize="none" autoCorrect={false} />
               <View style={{ height: 8 }} />
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: C.text2, fontSize: 12 }}>Load last 30 rounds</Text>
-                <TouchableOpacity
-                  style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: loadHistory ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}
-                  onPress={() => setLoadHistory(v => !v)}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", alignSelf: loadHistory ? "flex-end" : "flex-start" }} />
-                </TouchableOpacity>
-              </View>
-              <View style={{ height: 8 }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={{ color: C.text2, fontSize: 12 }}>Show token usage</Text>
                 <TouchableOpacity
                   style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: showStats ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}
@@ -827,7 +821,7 @@ export default function ChatScreen() {
                 </TouchableOpacity>
               </View>
               <View style={{ height: 8 }} />
-                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={status === "disconnected" ? () => connect() : disconnect} activeOpacity={0.8}>
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: status === "connected" || status === "connecting" ? "#dc2626" : C.accent }, status === "connecting" && { opacity: 0.5 }]} onPress={() => { if (status === "disconnected") { autoLoadHistoryRef.current = true; connect(); } else disconnect(); }} activeOpacity={0.8}>
                   <Text style={styles.connectBtnText}>{status === "connected" ? "Disconnect" : status === "connecting" ? "Cancel" : "Connect"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, marginTop: 8 }]} onPress={() => { if (status === "connected") setShowSessionPicker(true); else fetchSessionsTmp(); }} activeOpacity={0.7}>
@@ -885,7 +879,7 @@ export default function ChatScreen() {
                 onPress={() => {
                   if (quickDirs.length >= 20 || !workDir) return;
                   const connectedThisDir = status === "connected" && connectedDirRef.current === workDir;
-                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats, sessionId: connectedThisDir ? currentSessionId : null, sessionLabel: connectedThisDir ? sessionLabel : null }]);
+                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, showStats, sessionId: connectedThisDir ? currentSessionId : null, sessionLabel: connectedThisDir ? sessionLabel : null }]);
                 }}
                 activeOpacity={0.7}
               >
@@ -928,15 +922,15 @@ export default function ChatScreen() {
             <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.4)" }}>
               <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: C.cardAlt, borderRadius: 14, padding: 20, width: "80%" }}>
                 <Text style={{ color: C.textBright, fontSize: 16, fontWeight: "600", marginBottom: 12 }}>Edit Quick Dir</Text>
-                {["name", "path", "loadHistory", "showStats"].map(field => (
+                {["name", "path", "showStats"].map(field => (
                   <View key={field} style={{ marginBottom: 8 }}>
-                    {field === "loadHistory" || field === "showStats" ? (
+                    {field === "showStats" ? (
                       <TouchableOpacity
                         style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 }}
                         onPress={() => setQuickDirs(prev => prev.map((q, j) => j === editingQuick ? { ...q, [field]: !q[field] } : q))}
                         activeOpacity={0.7}
                       >
-                        <Text style={{ color: C.text2, fontSize: 13 }}>{field === "loadHistory" ? "Load last 30 rounds" : "Show token usage"}</Text>
+                        <Text style={{ color: C.text2, fontSize: 13 }}>Show token usage</Text>
                         <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: quickDirs[editingQuick]?.[field] ? C.accent : C.border, justifyContent: "center", paddingHorizontal: 2 }}>
                           <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff", alignSelf: quickDirs[editingQuick]?.[field] ? "flex-end" : "flex-start" }} />
                         </View>
