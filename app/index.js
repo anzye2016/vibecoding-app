@@ -213,6 +213,7 @@ export default function ChatScreen() {
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const lastActiveTagRef = useRef(-1);
+  const messagesCache = useRef(new Map());
   const pendingHistoryDirRef = useRef("");
   const pendingHistorySessionRef = useRef(null);
   const currentSessionIdRef = useRef(null);
@@ -388,6 +389,10 @@ export default function ChatScreen() {
         pendingHistoryDirRef.current = workDirRef.current;
         pendingHistorySessionRef.current = currentSessionIdRef.current;
         ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
+      } else {
+        const ck = workDirRef.current + "::" + (currentSessionIdRef.current || "");
+        const cached = messagesCache.current.get(ck);
+        if (cached) setMessages(cached);
       }
       ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
       flushQueue();
@@ -457,15 +462,19 @@ export default function ChatScreen() {
           if (msg.sessionId && pendingHistorySessionRef.current !== null && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
-          setMessages([]);
           if (msg.rounds && Array.isArray(msg.rounds)) {
+            const histMsgs = [];
             msg.rounds.forEach((r, idx) => {
-              if (idx > 0) addMessage({ type: "spacer" });
-              addMessage({ type: "history-user", text: r.user });
-              addMessage({ type: "history-assistant", text: r.assistant });
+              if (idx > 0) histMsgs.push({ type: "spacer" });
+              histMsgs.push({ type: "history-user", text: r.user });
+              histMsgs.push({ type: "history-assistant", text: r.assistant });
             });
-            addMessage({ type: "status", text: "--- History loaded ---" });
+            histMsgs.push({ type: "status", text: "--- History loaded ---" });
+            setMessages(histMsgs);
+            messagesCache.current.set(workDirRef.current + "::" + (currentSessionIdRef.current || ""), histMsgs);
             requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+          } else {
+            setMessages([]);
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
@@ -543,6 +552,9 @@ export default function ChatScreen() {
     pendingQueue.current = [];
     setPendingCount(0);
     if (wsRef.current && wsRef.current.readyState === 1) {
+      // Save current messages before switching session
+      const oldKey = workDir + "::" + (currentSessionIdRef.current || "");
+      if (messages.length > 0) messagesCache.current.set(oldKey, messages);
       wsRef.current.send(JSON.stringify({ type: "select_session", sessionId: sessionId || null, dir: workDir }));
       setMessages([]);
       historyLoadedRef.current = false;
@@ -562,6 +574,11 @@ export default function ChatScreen() {
 
   const switchToQuickDir = (q, i) => {
     if (!q.path) return;
+    // Save current messages before switching
+    if (lastActiveTagRef.current >= 0) {
+      const prevKey = workDir + "::" + (currentSessionIdRef.current || "");
+      if (messages.length > 0) messagesCache.current.set(prevKey, messages);
+    }
     lastActiveTagRef.current = i ?? -1;
     if (status !== "disconnected") disconnect();
     if (q.showStats !== undefined) setShowStats(q.showStats);
@@ -578,6 +595,8 @@ export default function ChatScreen() {
 
   const refreshHistory = () => {
     if (wsRef.current && wsRef.current.readyState === 1) {
+      const key = workDir + "::" + (currentSessionIdRef.current || "");
+      messagesCache.current.delete(key);
       pendingHistoryDirRef.current = workDir;
       pendingHistorySessionRef.current = currentSessionIdRef.current;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
