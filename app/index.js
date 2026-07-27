@@ -1052,7 +1052,7 @@ const useStyles = (C) => StyleSheet.create({
   emptyHint: { color: C.placeholder, fontSize: 14, textAlign: "center", marginTop: 40 },
   statusLine: { color: "#737373", fontSize: 13, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", lineHeight: 20 },
   errorLine: { color: "#ef4444", fontSize: 13, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", lineHeight: 20 },
-  userBubble: { alignSelf: "flex-end", maxWidth: "88%", backgroundColor: C.accent, borderRadius: 18, borderBottomRightRadius: 3, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
+  userBubble: { alignSelf: "flex-end", maxWidth: "88%", backgroundColor: C.accent, borderRadius: 18, borderBottomRightRadius: 3, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
   userBubbleText: { color: isLightHex(C.bg) ? "#09090b" : "#fff", fontSize: 15, lineHeight: 22 },
   assistantBubble: { alignSelf: "flex-start", maxWidth: "92%", backgroundColor: C.card, borderRadius: 18, borderBottomLeftRadius: 3, paddingHorizontal: 12, paddingVertical: 6, marginTop: 4, borderWidth: 1, borderColor: C.border },
   thinkingBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginTop: 4 },
