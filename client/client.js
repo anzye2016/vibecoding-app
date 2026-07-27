@@ -54,6 +54,7 @@ let processingDir = null;
 let processingSessionId = null;
 let compactChild = null;
 const allChildren = new Set();
+let currentTabId = "";
 let ws = null;
 let reconnectTimer = null;
 let retryCount = 0;
@@ -63,6 +64,7 @@ let disconnectedSince = null;
 let feishuNotified = false;
 const sessionCache = new Map();
 const newSessionDirs = new Set();
+const tabSessions = new Map();
 
 let sendFeishuText = null;
 const feishuPath = new URL("../lib/send-feishu.js", import.meta.url).pathname;
@@ -294,12 +296,15 @@ async function sendHistory(msg) {
   if (msg.sessionId) {
     sid = msg.sessionId;
   } else {
-    if (!sessionCache.has(cacheKey)) {
-      const sid_ = await getLastSession(dir);
-      if (sid_) { sessionCache.set(cacheKey, sid_); }
-      else { console.warn("[client] sendHistory: no session found for", dir); return; }
+    sid = tabSessions.get(currentTabId);
+    if (!sid) {
+      if (!sessionCache.has(cacheKey)) {
+        const sid_ = await getLastSession(dir);
+        if (sid_) { sessionCache.set(cacheKey, sid_); }
+        else { console.warn("[client] sendHistory: no session found for", dir); return; }
+      }
+      sid = sessionCache.get(cacheKey);
     }
-    sid = sessionCache.get(cacheKey);
   }
   if (sid) {
     await loadHistory(dir, sid);
@@ -322,6 +327,12 @@ async function handleListSessions(msg) {
 }
 
 function handleSelectSession(msg) {
+  if (msg.sessionId) {
+    tabSessions.set(currentTabId, msg.sessionId);
+  } else {
+    tabSessions.delete(currentTabId);
+  }
+  // Also keep the old sessionCache for backward compat
   const dir = msg.dir || process.cwd();
   const isWin = dir.match(/^[A-Za-z]:/);
   const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
@@ -359,6 +370,7 @@ function connect() {
   ws.on("message", (data) => {
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
+    currentTabId = msg.tabId || "";
 
     if (msg.type === "msg") {
       handleMessage(msg);
@@ -826,7 +838,7 @@ function cancelCurrent() {
 
 function send(obj) {
   if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify(obj));
+    ws.send(JSON.stringify(currentTabId ? { ...obj, tabId: currentTabId } : obj));
   }
 }
 
