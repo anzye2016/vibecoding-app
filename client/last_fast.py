@@ -1,16 +1,35 @@
-import json, sys, subprocess, os, sqlite3
+import json, sys, subprocess, os, sqlite3, platform
 
 sid = sys.argv[1]
 cwd = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 
-# Get DB path from opencode (fast, just returns a path)
-try:
-    r = subprocess.run(["opencode.cmd", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
-except FileNotFoundError:
-    r = subprocess.run(["opencode", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
+# Find opencode database path without invoking opencode CLI (which is slow)
+def find_db():
+    # Try XDG data home first
+    xdg = os.environ.get("XDG_DATA_HOME") or ""
+    if xdg:
+        p = os.path.join(xdg, "opencode", "opencode.db")
+        if os.path.exists(p): return p
+    # Linux/macOS default
+    p = os.path.join(os.path.expanduser("~"), ".local", "share", "opencode", "opencode.db")
+    if os.path.exists(p): return p
+    # Windows AppData
+    if platform.system() == "Windows":
+        for base in [os.environ.get("APPDATA", ""), os.environ.get("LOCALAPPDATA", "")]:
+            if base:
+                p = os.path.join(base, "opencode", "opencode.db")
+                if os.path.exists(p): return p
+    # Fallback: opencode CLI (slow path)
+    try:
+        r = subprocess.run(["opencode.cmd", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
+    except FileNotFoundError:
+        r = subprocess.run(["opencode", "db", "path"], capture_output=True, text=True, encoding="utf-8", cwd=cwd)
+    p = r.stdout.strip()
+    if p and os.path.exists(p): return p
+    return None
 
-db_path = r.stdout.strip()
-if not db_path or not os.path.exists(db_path):
+db_path = find_db()
+if not db_path:
     print(json.dumps([]))
     sys.exit(0)
 
