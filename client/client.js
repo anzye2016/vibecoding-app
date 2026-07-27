@@ -267,9 +267,7 @@ async function loadHistory(dir, sessionId) {
       const r = spawnSync(pyBin, [script, sessionId, dir], { encoding: "utf-8" });
       raw = r.stdout;
     } else {
-      const winTmp = (process.env.TEMP || process.env.TMPDIR || "/tmp").split("\\").join("/");
-      const wslTmp = "/mnt/" + winTmp[0].toLowerCase() + winTmp.slice(2);
-      const fScript = "/mnt/c" + script.slice(2).replace(/\\/g, "/");
+      const fScript = "/mnt/" + script[0].toLowerCase() + script.slice(2).replace(/\\/g, "/");
       const cmd = `cd '${dir}' && python3 '${fScript}' '${sessionId}' '${dir}'`;
       raw = await wsl(cmd);
     }
@@ -726,7 +724,8 @@ async function handleMessage(msg) {
             out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
           } else {
             const dbArgs = dbPaths.map(p => `"${p}"`).join(" ");
-            out = await wsl(`python3 /mnt/c/vibecoding-app/client/stats.py "${sid}" ${dbArgs}`);
+            const statsScript = "/mnt/" + __dirname[0].toLowerCase() + __dirname.slice(2).replace(/\\/g, "/") + "/stats.py";
+            out = await wsl(`python3 '${statsScript}' "${sid}" ${dbArgs}`);
           }
           if (out) {
             const s = JSON.parse(out);
