@@ -9,7 +9,7 @@ Phone App ←──WSS──→ your-domain.com:443 (nginx) ──WS──→ 12
 ## Screenshots
 
 <p align="center">
-  <img src="assets/vibecoding-themes-row.png" width="100%" alt="VibeCoding 5 themes × dark/light mode">
+  <img src="assets/vibecoding-themes-row-v2.png" width="100%" alt="VibeCoding 5 themes × dark/light mode">
 </p>
 
 ## Installation

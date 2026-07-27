@@ -9,7 +9,7 @@
 ## 截图
 
 <p align="center">
-  <img src="assets/vibecoding-themes-row.png" width="100%" alt="VibeCoding 5 主题 × 深色/浅色模式">
+  <img src="assets/vibecoding-themes-row-v2.png" width="100%" alt="VibeCoding 5 主题 × 深色/浅色模式">
 </p>
 
 ## 安装部署
