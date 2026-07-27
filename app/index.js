@@ -239,7 +239,7 @@ export default function ChatScreen() {
   /* ── Per-tab state ── */
   const tabMessages = useRef(new Map());
   const tabProcessing = useRef(new Map());
-  const activeTabIdRef = useRef("");
+  const activeTabIdRef = useRef(genTabId());
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
