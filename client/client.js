@@ -55,6 +55,7 @@ let processingSessionId = null;
 let compactChild = null;
 const allChildren = new Set();
 let currentTabId = "";
+let processingTabId = "";
 let ws = null;
 let reconnectTimer = null;
 let retryCount = 0;
@@ -446,6 +447,7 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
+    processingTabId = "";
     compactChild = null;
     send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` });
     send({ type: "done", code: 0 });
@@ -647,6 +649,7 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
+    processingTabId = "";
   }
 
   let child;
@@ -680,6 +683,7 @@ async function handleMessage(msg) {
 
   currentChild = child;
   allChildren.add(child);
+  processingTabId = currentTabId;
   processingDir = actualDir;
   processingSessionId = lastSessionId;
   const rlOut = readline.createInterface({ input: child.stdout });
@@ -718,6 +722,7 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
+    processingTabId = "";
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
@@ -759,6 +764,7 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
+    processingTabId = "";
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
   });
 }
@@ -816,6 +822,7 @@ function cancelCurrent() {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
+    processingTabId = "";
     send({ type: "cancelled" });
   }
   if (compactChild) {
@@ -838,7 +845,9 @@ function cancelCurrent() {
 
 function send(obj) {
   if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify(currentTabId ? { ...obj, tabId: currentTabId } : obj));
+    const isTaskMsg = obj.type === "chunk" || obj.type === "done" || obj.type === "cancelled" || obj.type === "error" || obj.type === "processing";
+    const tabId = isTaskMsg && processingTabId ? processingTabId : currentTabId;
+    ws.send(JSON.stringify(tabId ? { ...obj, tabId } : obj));
   }
 }
 
