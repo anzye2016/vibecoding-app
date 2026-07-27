@@ -575,10 +575,8 @@ export default function ChatScreen() {
   const switchToQuickDir = (q, i) => {
     if (!q.path) return;
     // Save current messages before switching
-    if (lastActiveTagRef.current >= 0) {
-      const prevKey = workDir + "::" + (currentSessionIdRef.current || "");
-      if (messages.length > 0) messagesCache.current.set(prevKey, messages);
-    }
+    const prevKey = workDir + "::" + (currentSessionIdRef.current || "");
+    if (messages.length > 0) messagesCache.current.set(prevKey, messages);
     lastActiveTagRef.current = i ?? -1;
     if (status !== "disconnected") disconnect();
     if (q.showStats !== undefined) setShowStats(q.showStats);
