@@ -218,6 +218,7 @@ export default function ChatScreen() {
   const pendingHistorySessionRef = useRef(null);
   const currentSessionIdRef = useRef(null);
   const sessionPendingRef = useRef(false);
+  const restoredFromCacheRef = useRef(false);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -386,7 +387,8 @@ export default function ChatScreen() {
         currentSessionIdRef.current = ps.sessionId || null;
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
-        setMessages([]);
+        if (!restoredFromCacheRef.current) setMessages([]);
+        restoredFromCacheRef.current = false;
       }
       if (autoLoadHistoryRef.current) {
         autoLoadHistoryRef.current = false;
@@ -596,6 +598,10 @@ export default function ChatScreen() {
     pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
     setCurrentSessionId(q.sessionId || null);
     currentSessionIdRef.current = q.sessionId || null;
+    // Restore cached messages immediately (before WS connects)
+    const targetKey = q.path + "::" + (q.sessionId || "");
+    const targetCache = messagesCache.current.get(targetKey);
+    if (targetCache) { setMessages(targetCache); restoredFromCacheRef.current = true; }
     connect(q.path);
   };
 
