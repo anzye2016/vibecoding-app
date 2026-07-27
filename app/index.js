@@ -372,16 +372,16 @@ export default function ChatScreen() {
         pendingSessionRef.current = null;
         if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
-          if (loadHistory) {
-              pendingHistoryDirRef.current = workDirRef.current;
-              pendingHistorySessionRef.current = ps.sessionId || null;
-              ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: ps.sessionId || null }));
-            }
         setCurrentSessionId(ps.sessionId || null);
         currentSessionIdRef.current = ps.sessionId || null;
         setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
+      }
+      if (loadHistory) {
+        pendingHistoryDirRef.current = workDirRef.current;
+        pendingHistorySessionRef.current = currentSessionIdRef.current;
+        ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
       }
       ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
       flushQueue();
@@ -453,7 +453,7 @@ export default function ChatScreen() {
           }
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
-          if (msg.sessionId && currentSessionIdRef.current && msg.sessionId !== currentSessionIdRef.current) return;
+          if (msg.sessionId && pendingHistorySessionRef.current !== null && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
