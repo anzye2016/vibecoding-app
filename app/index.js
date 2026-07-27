@@ -545,6 +545,9 @@ export default function ChatScreen() {
     setSessionLabel(title || "(new)");
     setCurrentSessionId(sessionId || null);
     currentSessionIdRef.current = sessionId || null;
+    setQuickDirs(prev => prev.map(q =>
+      q.path === workDir ? { ...q, sessionId: sessionId || null, sessionLabel: title || null } : q
+    ));
   };
 
   const switchToQuickDir = (q) => {
@@ -609,11 +612,11 @@ export default function ChatScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
-          <Text style={styles.themeBtnText}>✕</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>↻</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
+          <Text style={styles.themeBtnText}>✕</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>☰</Text>
