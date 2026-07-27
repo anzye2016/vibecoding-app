@@ -457,9 +457,9 @@ export default function ChatScreen() {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
             if (loadHistory && !historyLoadedRef.current) {
-              ws.send(JSON.stringify({ type: "load_history", dir: workDir }));
+              ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
             }
-            ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+            ws.send(JSON.stringify({ type: "list_sessions", dir: workDirRef.current }));
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
             setProcessing(false);
