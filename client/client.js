@@ -722,7 +722,6 @@ async function handleMessage(msg) {
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
-    processingTabId = "";
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
@@ -750,12 +749,13 @@ async function handleMessage(msg) {
               let line = `c=${s.ctx.toLocaleString()} o=${s.out.toLocaleString()}`;
               if (s.reasoning) line += ` r=${s.reasoning.toLocaleString()}`;
               if (s.model) line += `\n${s.model}${s.variant ? " " + s.variant : ""}`;
-              send({ type: "chunk", text: line + "\n" });
+              send({ type: "chunk", text: line });
             }
           }
         }
       } catch {}
     }
+    processingTabId = "";
   });
 
   child.on("error", (err) => {
