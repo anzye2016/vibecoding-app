@@ -212,6 +212,7 @@ export default function ChatScreen() {
   const autoLoadHistoryRef = useRef(false);
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
+  const lastActiveTagRef = useRef(-1);
   const pendingHistoryDirRef = useRef("");
   const pendingHistorySessionRef = useRef(null);
   const currentSessionIdRef = useRef(null);
@@ -324,10 +325,10 @@ export default function ChatScreen() {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
     if (!dir) {
-      const ms = quickDirs.filter(q => q.path === workDir);
-      if (ms.length === 1 && ms[0].sessionId) {
-        pendingSessionRef.current = { sessionId: ms[0].sessionId, sessionLabel: ms[0].sessionLabel };
-        pendingSessionLabelRef.current = ms[0].sessionLabel && ms[0].sessionLabel !== "(auto)" && ms[0].sessionLabel !== "(new)" ? ms[0].sessionLabel : null;
+      const last = lastActiveTagRef.current >= 0 ? quickDirs[lastActiveTagRef.current] : null;
+      if (last && last.path === workDir && last.sessionId) {
+        pendingSessionRef.current = { sessionId: last.sessionId, sessionLabel: last.sessionLabel };
+        pendingSessionLabelRef.current = last.sessionLabel && last.sessionLabel !== "(auto)" && last.sessionLabel !== "(new)" ? last.sessionLabel : null;
       } else {
         pendingSessionRef.current = null;
         pendingSessionLabelRef.current = null;
@@ -559,8 +560,9 @@ export default function ChatScreen() {
     ));
   };
 
-  const switchToQuickDir = (q) => {
+  const switchToQuickDir = (q, i) => {
     if (!q.path) return;
+    lastActiveTagRef.current = i ?? -1;
     if (status !== "disconnected") disconnect();
     if (q.showStats !== undefined) setShowStats(q.showStats);
     if (!historyLoadedDirs.current.has(q.path)) {
@@ -634,19 +636,25 @@ export default function ChatScreen() {
       {quickDirs.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: C.cardAlt, maxHeight: 36 }}>
           <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 10, paddingVertical: 4 }}>
-            {quickDirs.map((q, i) => (
+            {quickDirs.map((q, i) => {
+              const isActive = q.path === workDir && (
+                (status === "connected" && (!q.sessionId || q.sessionId === currentSessionId)) ||
+                (status !== "connected" && lastActiveTagRef.current === i)
+              );
+              return (
               <TouchableOpacity
                 key={i}
                 style={{
                   paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
-                  backgroundColor: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? C.accent : C.card
+                  backgroundColor: isActive ? C.accent : C.card
                 }}
-                onPress={() => switchToQuickDir(q)}
+                onPress={() => switchToQuickDir(q, i)}
                 activeOpacity={0.7}
               >
-                <Text style={{ color: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
+                <Text style={{ color: isActive ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         </ScrollView>
       )}
@@ -875,7 +883,7 @@ export default function ChatScreen() {
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TouchableOpacity
                     style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
-                    onPress={() => { if (longPressed.current) { longPressed.current = false; return; } switchToQuickDir(q); setShowSettings(false); }}
+                    onPress={() => { if (longPressed.current) { longPressed.current = false; return; } switchToQuickDir(q, i); setShowSettings(false); }}
                     onLongPress={() => { longPressed.current = true; setEditingQuick(i); }}
                     activeOpacity={0.7}
                   >
