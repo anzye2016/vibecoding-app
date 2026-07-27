@@ -213,6 +213,7 @@ export default function ChatScreen() {
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const connSeq = useRef(0);
+  const pendingHistoryDirRef = useRef("");
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -328,6 +329,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (loadHistory && wsRef.current?.readyState === 1 && !historyLoadedRef.current) {
+      pendingHistoryDirRef.current = workDir;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
     }
   }, [loadHistory, workDir]);
@@ -423,6 +425,7 @@ export default function ChatScreen() {
         if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
         if (loadHistory) {
+          pendingHistoryDirRef.current = workDirRef.current;
           ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
         }
         setCurrentSessionId(ps.sessionId || null);
@@ -457,7 +460,8 @@ export default function ChatScreen() {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
             if (loadHistory && !historyLoadedRef.current) {
-              ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
+              pendingHistoryDirRef.current = workDirRef.current;
+          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
             }
             ws.send(JSON.stringify({ type: "list_sessions", dir: workDirRef.current }));
           } else {
@@ -501,7 +505,7 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "history") {
-          if (historyLoadedRef.current || connSeq.current !== ws._seq) return;
+          if (historyLoadedRef.current || connSeq.current !== ws._seq || pendingHistoryDirRef.current !== workDirRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
@@ -590,7 +594,8 @@ export default function ChatScreen() {
       setMessages([]);
       historyLoadedRef.current = false;
       if (loadHistory) {
-        wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+        pendingHistoryDirRef.current = workDir;
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
       }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
     }
