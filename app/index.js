@@ -209,6 +209,7 @@ export default function ChatScreen() {
   const longPressed = useRef(false);
   const nearBottom = useRef(true);
   const scrollTimerRef = useRef(null);
+  const connectedDirRef = useRef("");
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const pendingHistoryDirRef = useRef("");
@@ -351,6 +352,7 @@ export default function ChatScreen() {
       if (wsRef.current !== ws) return;
       retryCount.current = 0;
       setStatus("connected");
+      connectedDirRef.current = workDirRef.current;
       setShowSettings(false);
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
@@ -881,7 +883,8 @@ export default function ChatScreen() {
                 style={[styles.connectBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]}
                 onPress={() => {
                   if (quickDirs.length >= 20 || !workDir) return;
-                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats, sessionId: currentSessionId, sessionLabel }]);
+                  const connectedThisDir = status === "connected" && connectedDirRef.current === workDir;
+                  setQuickDirs(prev => [...prev, { name: "Quick" + (prev.length + 1), path: workDir, loadHistory, showStats, sessionId: connectedThisDir ? currentSessionId : null, sessionLabel: connectedThisDir ? sessionLabel : null }]);
                 }}
                 activeOpacity={0.7}
               >
