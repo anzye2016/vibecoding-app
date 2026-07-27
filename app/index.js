@@ -160,7 +160,7 @@ export default function ChatScreen() {
   const connectRef = useRef(null);
   const reconnectTimer = useRef(null);
   const appStateReady = useRef(false);
-  const connIntent = useRef({ auto: false, restoreProcessing: false });
+  const restoreProcessingRef = useRef(false);
   const retryCount = useRef(0);
 
   const getReconnectDelay = () => {
@@ -205,10 +205,10 @@ export default function ChatScreen() {
   const [quickDirs, setQuickDirs] = useState([]);
   const [editingQuick, setEditingQuick] = useState(null);
   const wasEverConnected = useRef(false);
-  const donePendingRef = useRef(null);
   const doneTimerRef = useRef(null);
   const longPressed = useRef(false);
   const nearBottom = useRef(true);
+  const scrollTimerRef = useRef(null);
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const pendingHistoryDirRef = useRef("");
@@ -226,11 +226,10 @@ export default function ChatScreen() {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "msg", dir: dir || workDir, msg: text }));
     addMessage({ type: "user", text: `${text}` });
-    if (donePendingRef.current) {
-      if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
-      const d = donePendingRef.current;
-      donePendingRef.current = null;
-      addMessage({ type: "status", text: d });
+    if (doneTimerRef.current) {
+      clearTimeout(doneTimerRef.current);
+      doneTimerRef.current = null;
+      addMessage({ type: "status", text: "--- Done ---" });
     }
     nearBottom.current = true;
     setProcessing(true);
@@ -287,82 +286,33 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
-    if (token) AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token);
-  }, [token]);
-
-  useEffect(() => {
-    if (roomId) AsyncStorage.setItem(STORAGE_KEYS.ROOM, roomId);
-  }, [roomId]);
-
-  useEffect(() => {
+    if (token) AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token).catch(() => {});
+    if (roomId) AsyncStorage.setItem(STORAGE_KEYS.ROOM, roomId).catch(() => {});
     if (workDir) AsyncStorage.setItem(STORAGE_KEYS.DIR, workDir).catch(() => {});
-  }, [workDir]);
-
-  useEffect(() => {
     if (relayUrl) AsyncStorage.setItem(STORAGE_KEYS.RELAY, relayUrl).catch(() => {});
-  }, [relayUrl]);
-
-  useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify({ n: themeName, d: isDark })).catch(() => {});
-  }, [themeName, isDark]);
-
-  useEffect(() => {
-    if (customColors) {
-      AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_COLORS, JSON.stringify(customColors)).catch(() => {});
-    } else {
-      AsyncStorage.removeItem(STORAGE_KEYS.CUSTOM_COLORS).catch(() => {});
-    }
-  }, [customColors]);
-
-  useEffect(() => {
-    if (bgImage) {
-      AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage).catch(() => {});
-    } else {
-      AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE).catch(() => {});
-    }
-  }, [bgImage]);
-
-  useEffect(() => {
+    if (customColors) AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_COLORS, JSON.stringify(customColors)).catch(() => {});
+    else AsyncStorage.removeItem(STORAGE_KEYS.CUSTOM_COLORS).catch(() => {});
+    if (bgImage) AsyncStorage.setItem(STORAGE_KEYS.BG_IMAGE, bgImage).catch(() => {});
+    else AsyncStorage.removeItem(STORAGE_KEYS.BG_IMAGE).catch(() => {});
     AsyncStorage.setItem(STORAGE_KEYS.BG_OPACITY, String(bgOpacity)).catch(() => {});
-  }, [bgOpacity]);
-
-  useEffect(() => {
-    if (loadHistory && wsRef.current?.readyState === 1 && !historyLoadedRef.current) {
-      pendingHistoryDirRef.current = workDir;
-      pendingHistorySessionRef.current = currentSessionIdRef.current;
-      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
-    }
-  }, [loadHistory, workDir]);
-
-  useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory)).catch(() => {});
-  }, [loadHistory]);
-
-  useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats)).catch(() => {});
-  }, [showStats]);
-
-  useEffect(() => {
-    try { AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs)); } catch {}
-  }, [quickDirs]);
+    try { AsyncStorage.setItem(STORAGE_KEYS.QUICK_DIRS, JSON.stringify(quickDirs)).catch(() => {}); } catch {}
+  }, [token, roomId, workDir, relayUrl, themeName, isDark, customColors, bgImage, bgOpacity, loadHistory, showStats, quickDirs]);
 
   const addMessage = useCallback((msg) => {
     setMessages((prev) => {
+      const last = prev[prev.length - 1];
       if (msg.type === "status" && (msg.text === "--- Connected ---" || msg.text === "--- PC online ---")) {
-        // Clear stale failure messages, don't add the success banner itself
         return prev.filter(m =>
           !(m.type === "error" && m.text === "Connection failed") &&
           !(m.type === "status" && m.text === "--- Disconnected ---") &&
           !(m.type === "status" && m.text === "--- PC offline ---")
         );
       }
-      // Dedup consecutive "--- Disconnected ---"
-      if (msg.type === "status" && msg.text === "--- Disconnected ---") {
-        const last = prev[prev.length - 1];
-        if (last && last.type === "status" && last.text === "--- Disconnected ---") return prev;
-      }
-      const last = prev[prev.length - 1];
-      if (msg.type === "chunk" && last && last.type === "chunk") {
+      if (msg.type === "status" && msg.text === "--- Disconnected ---" && last?.type === "status" && last.text === "--- Disconnected ---") return prev;
+      if (msg.type === "chunk" && last?.type === "chunk") {
         return [...prev.slice(0, -1), { ...last, text: last.text + msg.text }];
       }
       return [...prev, msg];
@@ -377,8 +327,7 @@ export default function ChatScreen() {
     if (!dir) { pendingSessionRef.current = null; pendingSessionLabelRef.current = null; }
 
     // Capture intent before any side effects
-    const isReconnect = !intentionalDisconnect.current && historyLoadedRef.current;
-    connIntent.current = { auto: isReconnect, restoreProcessing: isReconnect && processing };
+    restoreProcessingRef.current = !intentionalDisconnect.current && historyLoadedRef.current && processing;
 
     // Cleanup old connection; suppress its onclose from spawning a new timer
     intentionalDisconnect.current = true;
@@ -408,7 +357,7 @@ export default function ChatScreen() {
         reconnectTimer.current = null;
       }
       if (wasEverConnected.current) {
-        if (connIntent.current.restoreProcessing) setProcessing(true);
+        if (restoreProcessingRef.current) setProcessing(true);
         addMessage({ type: "status", text: "--- Connected ---" });
       } else {
         wasEverConnected.current = true;
@@ -470,38 +419,28 @@ export default function ChatScreen() {
             setProcessing(false);
           }
         } else if (msg.type === "chunk") {
-          if (donePendingRef.current) {
-            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
+          if (doneTimerRef.current) {
+            clearTimeout(doneTimerRef.current);
+            doneTimerRef.current = null;
             if (showStats) addMessage({ type: "status", text: msg.text.trim() });
-            const d = donePendingRef.current;
-            donePendingRef.current = null;
-            addMessage({ type: "status", text: d });
+            addMessage({ type: "status", text: "--- Done ---" });
           } else if (!showStats && /^c=[\d,]+/.test(msg.text.trim())) {
           } else {
             addMessage(msg);
           }
         } else if (msg.type === "done") {
           setProcessing(false);
-          if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
-          donePendingRef.current = "--- Done ---";
-          doneTimerRef.current = setTimeout(() => {
-            const d = donePendingRef.current;
-            donePendingRef.current = null;
-            if (d) addMessage({ type: "status", text: d });
-          }, 5000);
+          clearTimeout(doneTimerRef.current);
+          doneTimerRef.current = setTimeout(() => addMessage({ type: "status", text: "--- Done ---" }), 5000);
         } else if (msg.type === "cancelled") {
           setProcessing(false);
-          if (donePendingRef.current) {
-            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
-            donePendingRef.current = null;
-          }
+          clearTimeout(doneTimerRef.current);
+          doneTimerRef.current = null;
           addMessage({ type: "status", text: "--- Cancelled ---" });
         } else if (msg.type === "error") {
           setProcessing(false);
-          if (donePendingRef.current) {
-            if (doneTimerRef.current) { clearTimeout(doneTimerRef.current); doneTimerRef.current = null; }
-            donePendingRef.current = null;
-          }
+          clearTimeout(doneTimerRef.current);
+          doneTimerRef.current = null;
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "processing") {
           setProcessing(true);
@@ -615,6 +554,18 @@ export default function ChatScreen() {
     currentSessionIdRef.current = sessionId || null;
   };
 
+  const switchToQuickDir = (q) => {
+    if (!q.path) return;
+    if (status !== "disconnected") disconnect();
+    if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
+    if (q.showStats !== undefined) setShowStats(q.showStats);
+    pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
+    pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
+    setCurrentSessionId(q.sessionId || null);
+    currentSessionIdRef.current = q.sessionId || null;
+    connect(q.path);
+  };
+
   const fetchSessionsTmp = () => {
     if (!roomId.trim() || !token.trim()) return;
     const url = `${relayUrl || DEFAULT_RELAY}/${encodeURIComponent(roomId.trim())}/phone`;
@@ -670,16 +621,7 @@ export default function ChatScreen() {
                   paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
                   backgroundColor: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? C.accent : C.card
                 }}
-                onPress={() => {
-                  if (status !== "disconnected") disconnect();
-                  if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
-                  if (q.showStats !== undefined) setShowStats(q.showStats);
-                  pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
-                  pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
-                  setCurrentSessionId(q.sessionId || null);
-                  currentSessionIdRef.current = q.sessionId || null;
-                  connect(q.path);
-                }}
+                onPress={() => switchToQuickDir(q)}
                 activeOpacity={0.7}
               >
                 <Text style={{ color: q.path === workDir && (!q.sessionId || q.sessionId === currentSessionId) ? "#fff" : C.text, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>{q.name}</Text>
@@ -702,7 +644,8 @@ export default function ChatScreen() {
           scrollEventThrottle={100}
           onContentSizeChange={() => {
             if (nearBottom.current) {
-              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+              clearTimeout(scrollTimerRef.current);
+              scrollTimerRef.current = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
             }
           }}
           showsVerticalScrollIndicator={false}
@@ -923,17 +866,7 @@ export default function ChatScreen() {
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <TouchableOpacity
                     style={[styles.connectBtn, { flex: 1, backgroundColor: C.accent }]}
-                    onPress={() => {
-                      if (longPressed.current) { longPressed.current = false; return; }
-                      if (!q.path) return;
-                      if (status !== "disconnected") disconnect();
-                      if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
-                      if (q.showStats !== undefined) setShowStats(q.showStats);
-                      pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
-                      pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
-                      setShowSettings(false);
-                      connect(q.path);
-                    }}
+                    onPress={() => { if (longPressed.current) { longPressed.current = false; return; } switchToQuickDir(q); setShowSettings(false); }}
                     onLongPress={() => { longPressed.current = true; setEditingQuick(i); }}
                     activeOpacity={0.7}
                   >
