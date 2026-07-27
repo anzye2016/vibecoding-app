@@ -233,7 +233,6 @@ export default function ChatScreen() {
       addMessage({ type: "status", text: d });
     }
     nearBottom.current = true;
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
     setProcessing(true);
   };
 
@@ -257,7 +256,7 @@ export default function ChatScreen() {
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", (e) => {
       setKbHeight(e.endCoordinates.height);
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+      scrollRef.current?.scrollToEnd({ animated: true });
     });
     const hide = Keyboard.addListener("keyboardDidHide", () => {
       setKbHeight(0);
@@ -338,6 +337,12 @@ export default function ChatScreen() {
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.LOAD_HISTORY, String(loadHistory)).catch(() => {});
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (nearBottom.current) {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [messages]);
 
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats)).catch(() => {});
