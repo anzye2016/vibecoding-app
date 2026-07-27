@@ -718,20 +718,21 @@ async function handleMessage(msg) {
 
   child.on("close", async (code) => {
     if (currentChild !== child) return;
+    const completedTabId = processingTabId;
     allChildren.delete(child);
     currentChild = null;
     processingDir = null;
     processingSessionId = null;
     rlOut.close();
     rlErr.close();
-    send({ type: "done", code: code || 0 });
+    send({ type: "done", code: code || 0 }, completedTabId);
     if (code === 0) {
       try {
         const sid = lastSessionId || await getLastSession(dir);
         if (sid) {
           sessionCache.set(actualDir, sid);
           const sessions = await listSessions(dir);
-          send({ type: "sessions", sessions, current: sid, dir });
+          send({ type: "sessions", sessions, current: sid, dir }, completedTabId);
           let out;
           const dbPaths = config.statsDbPaths || [];
           if (isWin) {
@@ -749,7 +750,7 @@ async function handleMessage(msg) {
               let line = `c=${s.ctx.toLocaleString()} o=${s.out.toLocaleString()}`;
               if (s.reasoning) line += ` r=${s.reasoning.toLocaleString()}`;
               if (s.model) line += `\n${s.model}${s.variant ? " " + s.variant : ""}`;
-              send({ type: "chunk", text: line });
+              send({ type: "chunk", text: line }, completedTabId);
             }
           }
         }
@@ -843,8 +844,12 @@ function cancelCurrent() {
   }
 }
 
-function send(obj) {
+function send(obj, forceTabId) {
   if (ws && ws.readyState === 1) {
+    if (forceTabId) {
+      ws.send(JSON.stringify({ ...obj, tabId: forceTabId }));
+      return;
+    }
     const isTaskMsg = obj.type === "chunk" || obj.type === "done" || obj.type === "cancelled" || obj.type === "error" || obj.type === "processing";
     const tabId = isTaskMsg && processingTabId ? processingTabId : currentTabId;
     ws.send(JSON.stringify(tabId ? { ...obj, tabId } : obj));
