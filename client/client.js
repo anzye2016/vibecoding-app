@@ -52,6 +52,7 @@ writeFileSync(pidFile, String(process.pid));
 let currentChild = null;
 let processingDir = null;
 let compactChild = null;
+const allChildren = new Set();
 let ws = null;
 let reconnectTimer = null;
 let retryCount = 0;
@@ -380,7 +381,7 @@ function connect() {
       console.log("[client] select_session, id:", msg.sessionId, "dir:", msg.dir);
       handleSelectSession(msg);
     } else if (msg.type === "status_query") {
-      send({ type: "processing_state", active: currentChild !== null });
+      send({ type: "processing_state", active: currentChild !== null, dir: processingDir });
     }
   });
 
@@ -417,6 +418,27 @@ async function handleMessage(msg) {
   const message = msg.msg || "";
 
   if (!message.trim()) return;
+
+  if (message.trim() === "/stop") {
+    let killed = 0;
+    const toKill = [...allChildren];
+    allChildren.clear();
+    for (const child of toKill) {
+      if (child.exitCode === null && !child.killed) {
+        try {
+          if (IS_LINUX) { process.kill(-child.pid, "SIGTERM"); }
+          else { spawn("taskkill", ["/PID", child.pid.toString(), "/T", "/F"]); }
+          killed++;
+        } catch {}
+      }
+    }
+    currentChild = null;
+    processingDir = null;
+    compactChild = null;
+    send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` });
+    send({ type: "done", code: 0 });
+    return;
+  }
 
   if (message.trim() === "!!restart") {
     console.log("[client] Restart requested");
@@ -465,6 +487,7 @@ async function handleMessage(msg) {
       "--mode", cIsWin ? "win" : "wsl",
       "--opencode", ocBin,
     ], { stdio: ["ignore", "pipe", "pipe"] });
+    allChildren.add(compactChild);
 
     let cstdout = "";
     let cstderr = "";
@@ -472,6 +495,7 @@ async function handleMessage(msg) {
     compactChild.stderr.on("data", (d) => { cstderr += d; });
 
     compactChild.on("close", (code) => {
+      allChildren.delete(compactChild);
       compactChild = null;
       try {
         const result = JSON.parse(cstdout.trim() || "{}");
@@ -491,6 +515,7 @@ async function handleMessage(msg) {
     });
 
     compactChild.on("error", (err) => {
+      allChildren.delete(compactChild);
       compactChild = null;
       send({ type: "error", text: "Compact: " + err.message });
     });
@@ -641,6 +666,7 @@ async function handleMessage(msg) {
   }
 
   currentChild = child;
+  allChildren.add(child);
   processingDir = actualDir;
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
@@ -674,6 +700,7 @@ async function handleMessage(msg) {
 
   child.on("close", async (code) => {
     if (currentChild !== child) return;
+    allChildren.delete(child);
     currentChild = null;
     processingDir = null;
     rlOut.close();
@@ -712,6 +739,7 @@ async function handleMessage(msg) {
 
   child.on("error", (err) => {
     if (currentChild !== child) return;
+    allChildren.delete(child);
     currentChild = null;
     processingDir = null;
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });

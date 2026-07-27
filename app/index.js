@@ -508,7 +508,9 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "processing_state") {
-          setProcessing(msg.active);
+          if (!msg.dir || msg.dir === workDirRef.current) setProcessing(msg.active);
+          else if (msg.active === false) setProcessing(false);
+        } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
           if (msg.sessionId && currentSessionIdRef.current && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
