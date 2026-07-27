@@ -217,6 +217,7 @@ export default function ChatScreen() {
   const pendingHistoryDirRef = useRef("");
   const pendingHistorySessionRef = useRef(null);
   const currentSessionIdRef = useRef(null);
+  const sessionPendingRef = useRef(false);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -378,6 +379,7 @@ export default function ChatScreen() {
       if (pendingSessionRef.current) {
         const ps = pendingSessionRef.current;
         pendingSessionRef.current = null;
+        sessionPendingRef.current = true;
         if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
         setCurrentSessionId(ps.sessionId || null);
@@ -395,6 +397,7 @@ export default function ChatScreen() {
         const ck = workDirRef.current + "::" + (currentSessionIdRef.current || "");
         const cached = messagesCache.current.get(ck);
         if (cached) setMessages(cached);
+        else if (!autoLoadHistoryRef.current) setMessages([]);
       }
       ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
       flushQueue();
@@ -429,6 +432,7 @@ export default function ChatScreen() {
             setProcessing(false);
           }
         } else if (msg.type === "chunk") {
+          if (sessionPendingRef.current) return;
           if (doneTimerRef.current) {
             clearTimeout(doneTimerRef.current);
             doneTimerRef.current = null;
@@ -464,6 +468,7 @@ export default function ChatScreen() {
           if (msg.sessionId && pendingHistorySessionRef.current !== null && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
+          sessionPendingRef.current = false;
           if (msg.rounds && Array.isArray(msg.rounds)) {
             const histMsgs = [];
             msg.rounds.forEach((r, idx) => {
@@ -479,6 +484,7 @@ export default function ChatScreen() {
             setMessages([]);
           }
         } else if (msg.type === "sessions") {
+          sessionPendingRef.current = false;
           setSessions(msg.sessions || []);
           setCurrentSessionId(msg.current || null);
           currentSessionIdRef.current = msg.current || null;
