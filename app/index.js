@@ -383,6 +383,7 @@ export default function ChatScreen() {
         currentSessionIdRef.current = ps.sessionId || null;
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
+        setMessages([]);
       }
       if (autoLoadHistoryRef.current) {
         autoLoadHistoryRef.current = false;
@@ -641,7 +642,7 @@ export default function ChatScreen() {
           </View>
         </View>
         <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
-          <Text style={styles.themeBtnText}>↻</Text>
+          <Text style={styles.themeBtnText}>⟳</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { const k = workDir + "::" + (currentSessionIdRef.current || ""); messagesCache.current.delete(k); setMessages([]); }} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>✕</Text>
