@@ -672,7 +672,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
       {quickDirs.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: C.cardAlt, maxHeight: 36 }}>
+        <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} style={{ backgroundColor: C.cardAlt, maxHeight: 36 }}>
           <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 10, paddingVertical: 4 }}>
             {quickDirs.map((q, i) => {
               const isActive = q.path === workDir && (
