@@ -498,8 +498,10 @@ export default function ChatScreen() {
           }
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
-          setCurrentSessionId(msg.current || null);
-          currentSessionIdRef.current = msg.current || null;
+          if (tabId === activeTabIdRef.current) {
+            setCurrentSessionId(msg.current || null);
+            currentSessionIdRef.current = msg.current || null;
+          }
           if (pendingSessionLabelRef.current) {
             setSessionLabel(pendingSessionLabelRef.current);
             pendingSessionLabelRef.current = null;

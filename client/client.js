@@ -323,7 +323,7 @@ async function handleListSessions(msg) {
     const sid = await getLastSession(dir);
     if (sid) sessionCache.set(cacheKey, sid);
   }
-  const current = sessionCache.get(cacheKey) || null;
+  const current = tabSessions.get(currentTabId) || sessionCache.get(cacheKey) || null;
   send({ type: "sessions", sessions, current, dir });
 }
 
