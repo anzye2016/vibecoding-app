@@ -594,6 +594,8 @@ export default function ChatScreen() {
     // Switch to new tab
     activeTabIdRef.current = q.tabId;
     lastActiveTagRef.current = i ?? -1;
+    setWorkDir(q.path);
+    workDirRef.current = q.path;
     setCurrentSessionId(q.sessionId || null);
     currentSessionIdRef.current = q.sessionId || null;
     setSessionLabel(q.sessionLabel || "(auto)");
