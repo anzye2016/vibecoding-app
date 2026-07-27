@@ -51,6 +51,7 @@ writeFileSync(pidFile, String(process.pid));
 
 let currentChild = null;
 let processingDir = null;
+let processingSessionId = null;
 let compactChild = null;
 const allChildren = new Set();
 let ws = null;
@@ -381,7 +382,7 @@ function connect() {
       console.log("[client] select_session, id:", msg.sessionId, "dir:", msg.dir);
       handleSelectSession(msg);
     } else if (msg.type === "status_query") {
-      send({ type: "processing_state", active: currentChild !== null, dir: msg.dir });
+      send({ type: "processing_state", active: currentChild !== null, dir: msg.dir, sessionId: processingSessionId });
     }
   });
 
@@ -434,6 +435,7 @@ async function handleMessage(msg) {
     }
     currentChild = null;
     processingDir = null;
+    processingSessionId = null;
     compactChild = null;
     send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` });
     send({ type: "done", code: 0 });
@@ -634,6 +636,7 @@ async function handleMessage(msg) {
     }
     currentChild = null;
     processingDir = null;
+    processingSessionId = null;
   }
 
   let child;
@@ -668,6 +671,7 @@ async function handleMessage(msg) {
   currentChild = child;
   allChildren.add(child);
   processingDir = actualDir;
+  processingSessionId = lastSessionId;
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
 
@@ -703,6 +707,7 @@ async function handleMessage(msg) {
     allChildren.delete(child);
     currentChild = null;
     processingDir = null;
+    processingSessionId = null;
     rlOut.close();
     rlErr.close();
     send({ type: "done", code: code || 0 });
@@ -742,6 +747,7 @@ async function handleMessage(msg) {
     allChildren.delete(child);
     currentChild = null;
     processingDir = null;
+    processingSessionId = null;
     send({ type: "error", text: `Failed to start opencode: ${err.message}` });
   });
 }
@@ -798,6 +804,7 @@ function cancelCurrent() {
     }
     currentChild = null;
     processingDir = null;
+    processingSessionId = null;
     send({ type: "cancelled" });
   }
   if (compactChild) {

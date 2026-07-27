@@ -434,7 +434,7 @@ export default function ChatScreen() {
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
       }
-      ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current }));
+      ws.send(JSON.stringify({ type: "status_query", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
       flushQueue();
     };
 
@@ -508,8 +508,10 @@ export default function ChatScreen() {
         } else if (msg.type === "processing") {
           setProcessing(true);
         } else if (msg.type === "processing_state") {
-          if (!msg.dir || msg.dir === workDirRef.current) setProcessing(msg.active);
-          else if (msg.active === false) setProcessing(false);
+          if (msg.active === false) setProcessing(false);
+          else if (!msg.dir || msg.dir === workDirRef.current) {
+            if (!msg.sessionId || msg.sessionId === currentSessionIdRef.current) setProcessing(true);
+          }
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
           if (msg.sessionId && currentSessionIdRef.current && msg.sessionId !== currentSessionIdRef.current) return;
