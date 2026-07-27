@@ -1,10 +1,7 @@
-import json, sys, subprocess, os, time, sqlite3
-from collections import OrderedDict
+import json, sys, subprocess, os, sqlite3
 
 sid = sys.argv[1]
 cwd = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
-
-t0 = time.time()
 
 # Get DB path from opencode (fast, just returns a path)
 try:
@@ -84,5 +81,4 @@ for r in reversed(msg_rows):
         else:
             rounds.append({"user": u_text, "assistant": text})
 
-t = time.time() - t0
 print(json.dumps(rounds[-30:]))

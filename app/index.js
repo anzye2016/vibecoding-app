@@ -431,7 +431,6 @@ export default function ChatScreen() {
         setCurrentSessionId(ps.sessionId || null);
         setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
-        setMessages([]);
         historyLoadedRef.current = false;
       }
     };
