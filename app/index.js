@@ -457,11 +457,11 @@ export default function ChatScreen() {
           doneTimerRef.current = null;
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "processing") {
-          setProcessing(true);
+          if (!sessionPendingRef.current) setProcessing(true);
         } else if (msg.type === "processing_state") {
           if (msg.active === false) setProcessing(false);
           else if (!msg.dir || msg.dir === workDirRef.current) {
-            if (!msg.sessionId || !currentSessionIdRef.current || msg.sessionId === currentSessionIdRef.current) setProcessing(true);
+            if (msg.sessionId && msg.sessionId === currentSessionIdRef.current) setProcessing(true);
           }
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
