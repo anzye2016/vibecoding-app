@@ -600,7 +600,9 @@ export default function ChatScreen() {
     currentSessionIdRef.current = q.sessionId || null;
     setSessionLabel(q.sessionLabel || "(auto)");
     // Restore messages & processing
-    setMessages(tabMessages.current.get(q.tabId) || []);
+    const targetMsgs = tabMessages.current.get(q.tabId) || [];
+    if (targetMsgs.length > 0) restoredFromCacheRef.current = true;
+    setMessages(targetMsgs);
     const p = tabProcessing.current.get(q.tabId);
     setProcessing(p !== undefined ? p : false);
     nearBottom.current = true;
@@ -611,6 +613,11 @@ export default function ChatScreen() {
         wsRef.current.send(JSON.stringify({ type: "load_history", tabId: q.tabId, dir: q.path, sessionId: q.sessionId || null }));
       }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", tabId: q.tabId, dir: q.path }));
+    }
+    if (!wsRef.current || wsRef.current.readyState !== 1) {
+      pendingSessionRef.current = { sessionId: q.sessionId, sessionLabel: q.sessionLabel, tabId: q.tabId };
+      pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
+      connect(q.path);
     }
   };
 
