@@ -339,12 +339,6 @@ export default function ChatScreen() {
   }, [loadHistory]);
 
   useEffect(() => {
-    if (nearBottom.current) {
-      scrollRef.current?.scrollToEnd({ animated: false });
-    }
-  }, [messages]);
-
-  useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEYS.SHOW_STATS, String(showStats)).catch(() => {});
   }, [showStats]);
 
@@ -707,7 +701,10 @@ export default function ChatScreen() {
           }}
           scrollEventThrottle={100}
           onContentSizeChange={() => {
-            if (nearBottom.current) scrollRef.current?.scrollToEnd({ animated: false });
+            if (nearBottom.current) {
+              scrollRef.current?.scrollToEnd({ animated: false });
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+            }
           }}
           showsVerticalScrollIndicator={false}
         >
