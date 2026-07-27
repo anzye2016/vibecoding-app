@@ -654,7 +654,7 @@ export default function ChatScreen() {
                   if (status !== "disconnected") disconnect();
                   if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                   if (q.showStats !== undefined) setShowStats(q.showStats);
-                  pendingSessionLabelRef.current = q.sessionLabel || null;
+                  pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
                   pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                   connect(q.path);
                 }}
@@ -905,9 +905,8 @@ export default function ChatScreen() {
                       if (status !== "disconnected") disconnect();
                       if (q.loadHistory !== undefined) setLoadHistory(q.loadHistory);
                       if (q.showStats !== undefined) setShowStats(q.showStats);
-                  pendingSessionLabelRef.current = q.sessionLabel || null;
-                  pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
-                  pendingSessionLabelRef.current = q.sessionLabel || null;
+                      pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
+                      pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                       setShowSettings(false);
                       connect(q.path);
                     }}
