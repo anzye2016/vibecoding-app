@@ -324,10 +324,10 @@ export default function ChatScreen() {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
     if (!dir) {
-      const m = quickDirs.find(q => q.path === workDir);
-      if (m && m.sessionId) {
-        pendingSessionRef.current = { sessionId: m.sessionId, sessionLabel: m.sessionLabel };
-        pendingSessionLabelRef.current = m.sessionLabel && m.sessionLabel !== "(auto)" && m.sessionLabel !== "(new)" ? m.sessionLabel : null;
+      const ms = quickDirs.filter(q => q.path === workDir);
+      if (ms.length === 1 && ms[0].sessionId) {
+        pendingSessionRef.current = { sessionId: ms[0].sessionId, sessionLabel: ms[0].sessionLabel };
+        pendingSessionLabelRef.current = ms[0].sessionLabel && ms[0].sessionLabel !== "(auto)" && ms[0].sessionLabel !== "(new)" ? ms[0].sessionLabel : null;
       } else {
         pendingSessionRef.current = null;
         pendingSessionLabelRef.current = null;
