@@ -645,7 +645,7 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>↻</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setMessages([])} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
+        <TouchableOpacity onPress={() => { const k = workDir + "::" + (currentSessionIdRef.current || ""); messagesCache.current.delete(k); setMessages([]); }} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>✕</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
