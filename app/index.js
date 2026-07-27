@@ -562,7 +562,7 @@ export default function ChatScreen() {
       pendingHistorySessionRef.current = sessionId || null;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: sessionId || null }));
       wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
-      historyLoadedDirs.current.add(workDir);
+      historyLoadedDirs.current.add(workDir + "::" + (sessionId || ""));
     }
     setSessionLabel(title || "(new)");
     setCurrentSessionId(sessionId || null);
@@ -580,8 +580,8 @@ export default function ChatScreen() {
     lastActiveTagRef.current = i ?? -1;
     if (status !== "disconnected") disconnect();
     if (q.showStats !== undefined) setShowStats(q.showStats);
-    if (!historyLoadedDirs.current.has(q.path)) {
-      historyLoadedDirs.current.add(q.path);
+    if (!historyLoadedDirs.current.has(q.path + "::" + (q.sessionId || ""))) {
+      historyLoadedDirs.current.add(q.path + "::" + (q.sessionId || ""));
       autoLoadHistoryRef.current = true;
     }
     pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
@@ -598,7 +598,7 @@ export default function ChatScreen() {
       pendingHistoryDirRef.current = workDir;
       pendingHistorySessionRef.current = currentSessionIdRef.current;
       wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
-      historyLoadedDirs.current.add(workDir);
+      historyLoadedDirs.current.add(workDir + "::" + (currentSessionIdRef.current || ""));
     }
   };
 
