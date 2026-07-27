@@ -508,7 +508,7 @@ export default function ChatScreen() {
           setProcessing(true);
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
-          if (msg.sessionId && msg.sessionId !== currentSessionIdRef.current) return;
+          if (msg.sessionId && currentSessionIdRef.current && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
