@@ -434,6 +434,7 @@ export default function ChatScreen() {
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
       }
+      ws.send(JSON.stringify({ type: "status_query" }));
       flushQueue();
     };
 
@@ -506,7 +507,8 @@ export default function ChatScreen() {
           addMessage({ type: "error", text: msg.text });
         } else if (msg.type === "processing") {
           setProcessing(true);
-        } else if (msg.type === "history") {
+        } else if (msg.type === "processing_state") {
+          setProcessing(msg.active);
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
           if (msg.sessionId && currentSessionIdRef.current && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);

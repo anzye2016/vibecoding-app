@@ -379,6 +379,8 @@ function connect() {
     } else if (msg.type === "select_session") {
       console.log("[client] select_session, id:", msg.sessionId, "dir:", msg.dir);
       handleSelectSession(msg);
+    } else if (msg.type === "status_query") {
+      send({ type: "processing_state", active: currentChild !== null });
     }
   });
 
