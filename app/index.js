@@ -191,7 +191,8 @@ export default function ChatScreen() {
   useEffect(() => {
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+      for (const t of doneTimerRef.current.values()) clearTimeout(t);
+      doneTimerRef.current.clear();
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
@@ -223,7 +224,7 @@ export default function ChatScreen() {
   const [quickDirs, setQuickDirs] = useState([]);
   const [editingQuick, setEditingQuick] = useState(null);
   const wasEverConnected = useRef(false);
-  const doneTimerRef = useRef(null);
+  const doneTimerRef = useRef(new Map());
   const longPressed = useRef(false);
   const nearBottom = useRef(true);
   const scrollTimerRef = useRef(null);
@@ -266,9 +267,10 @@ export default function ChatScreen() {
     const tabId = activeTabIdRef.current;
     wsRef.current.send(JSON.stringify({ type: "msg", tabId, dir: dir || workDir, msg: text }));
     routeMsg(tabId, { type: "user", text: `${text}` });
-    if (doneTimerRef.current) {
-      clearTimeout(doneTimerRef.current);
-      doneTimerRef.current = null;
+    const dt = doneTimerRef.current.get(tabId);
+    if (dt) {
+      clearTimeout(dt);
+      doneTimerRef.current.delete(tabId);
       routeMsg(tabId, { type: "status", text: "--- Done ---" });
     }
     nearBottom.current = true;
@@ -444,9 +446,10 @@ export default function ChatScreen() {
             setProcessing(false);
           }
         } else if (msg.type === "chunk") {
-          if (doneTimerRef.current) {
-            clearTimeout(doneTimerRef.current);
-            doneTimerRef.current = null;
+          const dt = doneTimerRef.current.get(tabId);
+          if (dt) {
+            clearTimeout(dt);
+            doneTimerRef.current.delete(tabId);
             if (showStats) routeMsg(tabId, { type: "status", text: msg.text.trim() });
             routeMsg(tabId, { type: "status", text: "--- Done ---" });
           } else if (!showStats && /^c=[\d,]+/.test(msg.text.trim())) {
@@ -455,17 +458,20 @@ export default function ChatScreen() {
           }
         } else if (msg.type === "done") {
           routeProc(tabId, false);
-          clearTimeout(doneTimerRef.current);
-          doneTimerRef.current = setTimeout(() => routeMsg(tabId, { type: "status", text: "--- Done ---" }), 5000);
+          const prev = doneTimerRef.current.get(tabId);
+          if (prev) clearTimeout(prev);
+          doneTimerRef.current.set(tabId, setTimeout(() => routeMsg(tabId, { type: "status", text: "--- Done ---" }), 5000));
         } else if (msg.type === "cancelled") {
           routeProc(tabId, false);
-          clearTimeout(doneTimerRef.current);
-          doneTimerRef.current = null;
+          const prev = doneTimerRef.current.get(tabId);
+          if (prev) clearTimeout(prev);
+          doneTimerRef.current.delete(tabId);
           routeMsg(tabId, { type: "status", text: "--- Cancelled ---" });
         } else if (msg.type === "error") {
           routeProc(tabId, false);
-          clearTimeout(doneTimerRef.current);
-          doneTimerRef.current = null;
+          const prev = doneTimerRef.current.get(tabId);
+          if (prev) clearTimeout(prev);
+          doneTimerRef.current.delete(tabId);
           routeMsg(tabId, { type: "error", text: msg.text });
         } else if (msg.type === "processing") {
           routeProc(tabId, true);
