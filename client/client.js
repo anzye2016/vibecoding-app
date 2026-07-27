@@ -274,7 +274,7 @@ async function loadHistory(dir, sessionId) {
     if (!raw || raw.trim() === "[]") { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
-    send({ type: "history", rounds });
+    send({ type: "history", rounds, sessionId });
     console.log(`[client] Sent ${rounds.length} history rounds (fast path)`);
   } catch (e) {
     console.error("[client] loadHistory error:", e.message);
@@ -290,12 +290,17 @@ async function sendHistory(msg) {
 
   if (newSessionDirs.has(cacheKey)) return;
 
-  if (!sessionCache.has(cacheKey)) {
-    const sid = await getLastSession(dir);
-    if (sid) { sessionCache.set(cacheKey, sid); }
-    else { console.warn("[client] sendHistory: no session found for", dir); return; }
+  let sid;
+  if (msg.sessionId) {
+    sid = msg.sessionId;
+  } else {
+    if (!sessionCache.has(cacheKey)) {
+      const sid_ = await getLastSession(dir);
+      if (sid_) { sessionCache.set(cacheKey, sid_); }
+      else { console.warn("[client] sendHistory: no session found for", dir); return; }
+    }
+    sid = sessionCache.get(cacheKey);
   }
-  const sid = sessionCache.get(cacheKey);
   if (sid) {
     await loadHistory(dir, sid);
   } else {

@@ -213,6 +213,8 @@ export default function ChatScreen() {
   const pendingSessionRef = useRef(null);
   const pendingSessionLabelRef = useRef(null);
   const pendingHistoryDirRef = useRef("");
+  const pendingHistorySessionRef = useRef(null);
+  const currentSessionIdRef = useRef(null);
 
   useEffect(() => { workDirRef.current = workDir; }, [workDir]);
 
@@ -329,7 +331,8 @@ export default function ChatScreen() {
   useEffect(() => {
     if (loadHistory && wsRef.current?.readyState === 1 && !historyLoadedRef.current) {
       pendingHistoryDirRef.current = workDir;
-      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+      pendingHistorySessionRef.current = currentSessionIdRef.current;
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: currentSessionIdRef.current }));
     }
   }, [loadHistory, workDir]);
 
@@ -420,11 +423,13 @@ export default function ChatScreen() {
         pendingSessionRef.current = null;
         if (ps.sessionLabel) pendingSessionLabelRef.current = ps.sessionLabel;
         ws.send(JSON.stringify({ type: "select_session", sessionId: ps.sessionId || null, dir: workDirRef.current }));
-        if (loadHistory) {
-          pendingHistoryDirRef.current = workDirRef.current;
-          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
-        }
+          if (loadHistory) {
+              pendingHistoryDirRef.current = workDirRef.current;
+              pendingHistorySessionRef.current = ps.sessionId || null;
+              ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: ps.sessionId || null }));
+            }
         setCurrentSessionId(ps.sessionId || null);
+        currentSessionIdRef.current = ps.sessionId || null;
         setMessages([]);
         setSessionLabel(ps.sessionLabel || "(new)");
         historyLoadedRef.current = false;
@@ -457,7 +462,8 @@ export default function ChatScreen() {
             addMessage({ type: "status", text: "--- PC online ---" });
             if (loadHistory && !historyLoadedRef.current) {
               pendingHistoryDirRef.current = workDirRef.current;
-          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current }));
+              pendingHistorySessionRef.current = currentSessionIdRef.current;
+          ws.send(JSON.stringify({ type: "load_history", dir: workDirRef.current, sessionId: currentSessionIdRef.current }));
             }
             ws.send(JSON.stringify({ type: "list_sessions", dir: workDirRef.current }));
           } else {
@@ -502,6 +508,7 @@ export default function ChatScreen() {
           setProcessing(true);
         } else if (msg.type === "history") {
           if (historyLoadedRef.current || pendingHistoryDirRef.current !== workDirRef.current) return;
+          if (msg.sessionId && msg.sessionId !== currentSessionIdRef.current) return;
           console.log("[app] history received, rounds:", msg.rounds?.length);
           historyLoadedRef.current = true;
           setMessages([]);
@@ -517,6 +524,7 @@ export default function ChatScreen() {
         } else if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
           setCurrentSessionId(msg.current || null);
+          currentSessionIdRef.current = msg.current || null;
           if (pendingSessionLabelRef.current) {
             setSessionLabel(pendingSessionLabelRef.current);
             pendingSessionLabelRef.current = null;
@@ -554,6 +562,7 @@ export default function ChatScreen() {
     setStatus("disconnected");
     setProcessing(false);
     setCurrentSessionId(null);
+    currentSessionIdRef.current = null;
   };
 
   const sendMessage = () => {
@@ -592,12 +601,14 @@ export default function ChatScreen() {
       historyLoadedRef.current = false;
       if (loadHistory) {
         pendingHistoryDirRef.current = workDir;
-      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir }));
+        pendingHistorySessionRef.current = sessionId || null;
+      wsRef.current.send(JSON.stringify({ type: "load_history", dir: workDir, sessionId: sessionId || null }));
       }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
     }
     setSessionLabel(title || "(new)");
     setCurrentSessionId(sessionId || null);
+    currentSessionIdRef.current = sessionId || null;
   };
 
   const fetchSessionsTmp = () => {
@@ -614,6 +625,7 @@ export default function ChatScreen() {
         if (msg.type === "sessions") {
           setSessions(msg.sessions || []);
           setCurrentSessionId(msg.current || null);
+          currentSessionIdRef.current = msg.current || null;
           clearTimeout(t);
           ws.close();
           setShowSessionPicker(true);
@@ -661,6 +673,7 @@ export default function ChatScreen() {
                   pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
                   pendingSessionRef.current = q.sessionId ? { sessionId: q.sessionId, sessionLabel: q.sessionLabel } : null;
                   setCurrentSessionId(q.sessionId || null);
+                  currentSessionIdRef.current = q.sessionId || null;
                   connect(q.path);
                 }}
                 activeOpacity={0.7}
