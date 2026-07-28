@@ -445,6 +445,7 @@ function onJsonLine(line, tabId) {
     } else if (t === "error") {
       const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
       send({ type: "chunk", text: `[error] ${err}\n` }, tabId);
+      send({ type: "done", code: 1 }, tabId);
     }
   } catch {
     // non-JSON line (WSL noise), drop silently
@@ -481,14 +482,19 @@ async function handleMessage(msg) {
         send({ type: "cancelled" }, id);
       }
     }
+    // Broadcast clear to all tabs (even if no processes, e.g. after restart)
+    ws.send(JSON.stringify({ type: "clear_processing" }));
     return;
   }
 
   if (message.trim() === "!!restart") {
     console.log("[client] Restart requested");
-    send({ type: "chunk", text: "Restarting client...\n" }, tabKey);
+    send({ type: "done", code: 0 }, tabKey);
     cancelAll();
-    setTimeout(() => process.exit(0), 200);
+    setTimeout(() => {
+      if (ws) { ws.removeAllListeners(); try { ws._socket?.destroy(); } catch {} }
+      process.exit(0);
+    }, 500);
     return;
   }
 

@@ -441,10 +441,11 @@ export default function ChatScreen() {
         if (msg.type === "status") {
           if (msg.online) {
             addMessage({ type: "status", text: "--- PC online ---" });
+            for (const id of tabProcessing.current.keys()) routeProc(id, false);
             ws.send(JSON.stringify({ type: "list_sessions", tabId: activeTabIdRef.current, dir: workDirRef.current }));
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
-            routeProc(tabId, false);
+            for (const id of tabProcessing.current.keys()) routeProc(id, false);
           }
         } else if (msg.type === "chunk") {
           const dt = doneTimerRef.current.get(tabId);
@@ -475,6 +476,8 @@ export default function ChatScreen() {
           if (prev) clearTimeout(prev);
           doneTimerRef.current.delete(tabId);
           routeMsg(tabId, { type: "error", text: msg.text });
+        } else if (msg.type === "clear_processing") {
+          for (const id of tabProcessing.current.keys()) routeProc(id, false);
         } else if (msg.type === "processing") {
           routeProc(tabId, true);
         } else if (msg.type === "processing_state") {
