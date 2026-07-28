@@ -152,7 +152,7 @@ echo "[6/6] Setting up fail2ban..."
 mkdir -p /etc/fail2ban/filter.d
 cat > /etc/fail2ban/filter.d/vibecoding-relay-auth.conf <<'EOF'
 [Definition]
-failregex = ^.*REJECT ip=<HOST> reason=auth_failed
+failregex = ^\{"time":".*","level":".*","event":"reject","ip":"<HOST>","reason":"auth_failed"
 ignoreregex =
 EOF
 
