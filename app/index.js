@@ -174,7 +174,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState("");
   const [kbHeight, setKbHeight] = useState(0);
   const [spinner, setSpinner] = useState(0);
-  const historyLoadedRef = useRef(false);
+  const historyLoadedRef = useRef(new Map());
   const intentionalDisconnect = useRef(false);
   const connectRef = useRef(null);
   const reconnectTimer = useRef(null);
@@ -262,9 +262,9 @@ export default function ChatScreen() {
     if (tabId === activeTabIdRef.current) setProcessing(active);
   }, []);
 
-  const doSend = (text, dir) => {
+  const doSend = (text, dir, overrideTabId) => {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
-    const tabId = activeTabIdRef.current;
+    const tabId = overrideTabId || activeTabIdRef.current;
     wsRef.current.send(JSON.stringify({ type: "msg", tabId, dir: dir || workDir, msg: text }));
     routeMsg(tabId, { type: "user", text: `${text}` });
     const dt = doneTimerRef.current.get(tabId);
@@ -278,7 +278,7 @@ export default function ChatScreen() {
   };
 
   const enqueue = (text) => {
-    pendingQueue.current.push({ text, dir: workDirRef.current });
+    pendingQueue.current.push({ text, dir: workDirRef.current, tabId: activeTabIdRef.current });
     setPendingCount(pendingQueue.current.length);
   };
 
@@ -288,7 +288,7 @@ export default function ChatScreen() {
     pendingQueue.current = [];
     setPendingCount(0);
     for (const item of q) {
-      doSend(item.text, item.dir);
+      doSend(item.text, item.dir, item.tabId);
     }
   };
 
@@ -356,7 +356,8 @@ export default function ChatScreen() {
     if (!roomId.trim() || !token.trim()) return;
     if (typeof dir === "string") { setWorkDir(dir); workDirRef.current = dir; }
 
-    restoreProcessingRef.current = !intentionalDisconnect.current && historyLoadedRef.current && processing;
+    const hlKey = activeTabIdRef.current;
+    restoreProcessingRef.current = !intentionalDisconnect.current && historyLoadedRef.current.get(hlKey) && processing;
 
     intentionalDisconnect.current = true;
     if (reconnectTimer.current) {
@@ -400,13 +401,13 @@ export default function ChatScreen() {
         setCurrentSessionId(ps.sessionId || null);
         currentSessionIdRef.current = ps.sessionId || null;
         setSessionLabel(ps.sessionLabel || "(new)");
-        historyLoadedRef.current = false;
+        if (ps.tabId) historyLoadedRef.current.set(ps.tabId, false);
         if (!restoredFromCacheRef.current) setMessages([]);
         restoredFromCacheRef.current = false;
         if (autoLoadHistoryRef.current) {
           autoLoadHistoryRef.current = false;
           const hid = ps.tabId || "";
-          if (!tabMessages.current.has(hid)) tabMessages.current.set(hid, []);
+          if (!tabMessages.current.get(hid)?.length) tabMessages.current.set(hid, []);
           ws.send(JSON.stringify({ type: "load_history", tabId: hid, dir: workDirRef.current, sessionId: ps.sessionId || null }));
         }
         ws.send(JSON.stringify({ type: "list_sessions", tabId: ps.tabId || "", dir: workDirRef.current }));
@@ -443,7 +444,7 @@ export default function ChatScreen() {
             ws.send(JSON.stringify({ type: "list_sessions", tabId: activeTabIdRef.current, dir: workDirRef.current }));
           } else {
             addMessage({ type: "status", text: "--- PC offline ---" });
-            setProcessing(false);
+            routeProc(tabId, false);
           }
         } else if (msg.type === "chunk") {
           const dt = doneTimerRef.current.get(tabId);
@@ -453,6 +454,7 @@ export default function ChatScreen() {
             if (showStats) routeMsg(tabId, { type: "status", text: msg.text.trim() });
             routeMsg(tabId, { type: "status", text: "--- Done ---" });
           } else if (!showStats && /^c=[\d,]+/.test(msg.text.trim())) {
+            // skip cost lines when stats hidden
           } else {
             routeMsg(tabId, msg);
           }
@@ -481,7 +483,7 @@ export default function ChatScreen() {
             if (msg.sessionId && msg.sessionId === currentSessionIdRef.current) routeProc(tabId, true);
           }
         } else if (msg.type === "history") {
-          historyLoadedRef.current = true;
+          if (tabId) historyLoadedRef.current.set(tabId, true);
           if (msg.rounds && Array.isArray(msg.rounds)) {
             const histMsgs = [];
             msg.rounds.forEach((r, idx) => {
@@ -497,19 +499,19 @@ export default function ChatScreen() {
             setMessages([]);
           }
         } else if (msg.type === "sessions") {
-          setSessions(msg.sessions || []);
           if (tabId === activeTabIdRef.current) {
+            setSessions(msg.sessions || []);
             setCurrentSessionId(msg.current || null);
             currentSessionIdRef.current = msg.current || null;
-          }
-          if (pendingSessionLabelRef.current) {
-            setSessionLabel(pendingSessionLabelRef.current);
-            pendingSessionLabelRef.current = null;
-          } else if (!msg.current) {
-            setSessionLabel("(new)");
-          } else {
-            const cur = (msg.sessions || []).find(s => s.id === msg.current);
-            setSessionLabel(cur ? (cur.title || "(unnamed)") : "(auto)");
+            if (pendingSessionLabelRef.current) {
+              setSessionLabel(pendingSessionLabelRef.current);
+              pendingSessionLabelRef.current = null;
+            } else if (!msg.current) {
+              setSessionLabel("(new)");
+            } else {
+              const cur = (msg.sessions || []).find(s => s.id === msg.current);
+              setSessionLabel(cur ? (cur.title || "(unnamed)") : "(auto)");
+            }
           }
         }
       } catch (err) {
@@ -577,7 +579,7 @@ export default function ChatScreen() {
       const tabId = activeTabIdRef.current;
       wsRef.current.send(JSON.stringify({ type: "select_session", tabId, sessionId: sessionId || null, dir: workDir }));
       setMessages([]);
-      historyLoadedRef.current = false;
+      historyLoadedRef.current.set(tabId, false);
       if (tabMessages.current.has(tabId)) tabMessages.current.delete(tabId);
       wsRef.current.send(JSON.stringify({ type: "load_history", tabId, dir: workDir, sessionId: sessionId || null }));
       wsRef.current.send(JSON.stringify({ type: "list_sessions", tabId, dir: workDir }));
@@ -618,13 +620,13 @@ export default function ChatScreen() {
 
     if (wsRef.current?.readyState === 1) {
       wsRef.current.send(JSON.stringify({ type: "select_session", tabId: q.tabId, sessionId: q.sessionId || null, dir: q.path }));
-      if (!tabMessages.current.has(q.tabId) && q.sessionId) {
+      if (!(tabMessages.current.get(q.tabId)?.length > 0) && q.sessionId) {
         wsRef.current.send(JSON.stringify({ type: "load_history", tabId: q.tabId, dir: q.path, sessionId: q.sessionId || null }));
       }
       wsRef.current.send(JSON.stringify({ type: "list_sessions", tabId: q.tabId, dir: q.path }));
     }
     if (!wsRef.current || wsRef.current.readyState !== 1) {
-      if (!tabMessages.current.has(q.tabId)) autoLoadHistoryRef.current = true;
+      if (!(tabMessages.current.get(q.tabId)?.length > 0)) autoLoadHistoryRef.current = true;
       pendingSessionRef.current = { sessionId: q.sessionId, sessionLabel: q.sessionLabel, tabId: q.tabId };
       pendingSessionLabelRef.current = q.sessionLabel && q.sessionLabel !== "(auto)" && q.sessionLabel !== "(new)" ? q.sessionLabel : null;
       connect(q.path);
@@ -635,7 +637,7 @@ export default function ChatScreen() {
     if (wsRef.current && wsRef.current.readyState === 1) {
       const tabId = activeTabIdRef.current;
       if (tabMessages.current.has(tabId)) tabMessages.current.delete(tabId);
-      historyLoadedRef.current = false;
+      historyLoadedRef.current.set(tabId, false);
       wsRef.current.send(JSON.stringify({ type: "load_history", tabId, dir: workDir, sessionId: currentSessionIdRef.current }));
     }
   };
@@ -646,7 +648,7 @@ export default function ChatScreen() {
     const ws = new WebSocket(url, token.trim());
     const t = setTimeout(() => { try { ws.close(); } catch {} }, 8000);
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "list_sessions", dir: workDir }));
+      ws.send(JSON.stringify({ type: "list_sessions", tabId: activeTabIdRef.current, dir: workDir }));
     };
     ws.onmessage = (e) => {
       try {
@@ -681,7 +683,7 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={refreshHistory} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>F</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { const k = workDir + "::" + (currentSessionIdRef.current || ""); tabMessages.current.delete(k); setMessages([]); }} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
+        <TouchableOpacity onPress={() => { if (tabMessages.current.has(activeTabIdRef.current)) tabMessages.current.delete(activeTabIdRef.current); setMessages([]); }} style={[styles.themeBtn, { marginRight: 6 }]} activeOpacity={0.6}>
           <Text style={styles.themeBtnText}>✕</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.themeBtn} activeOpacity={0.6}>
@@ -1056,25 +1058,25 @@ const useStyles = (C) => StyleSheet.create({
   userBubbleText: { color: isLightHex(C.bg) ? "#09090b" : "#fff", fontSize: 15, lineHeight: 22 },
   assistantBubble: { alignSelf: "flex-start", maxWidth: "92%", backgroundColor: C.card, borderRadius: 18, borderBottomLeftRadius: 3, paddingHorizontal: 12, paddingVertical: 6, marginTop: 4, borderWidth: 1, borderColor: C.border },
   thinkingBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginTop: 4 },
-  thinkingDot: { color: C.text2, fontSize: 14, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", width: 16, textAlign: "center" },
-  thinkingText: { color: C.text2, fontSize: 13 },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, gap: 6, backgroundColor: C.cardAlt },
-  input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, maxHeight: 100 },
-  inputInner: { borderColor: C.border, backgroundColor: C.input, color: C.textBright, fontSize: 14 },
-  sendBtn: { width: 48, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: C.accent },
-  sendBtnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-  cancelBtn: { width: 48, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#dc2626" },
-  cancelBtnText: { color: "#fff", fontSize: 11, fontWeight: "600" },
-  sectionLabel: { color: C.text2, fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.06 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
-  modalTitle: { color: C.textBright, fontSize: 16, fontWeight: "600" },
+  thinkingText: { color: C.placeholder, fontSize: 13, fontStyle: "italic" },
+  thinkingDot: { color: C.accent, fontSize: 11, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 10, paddingTop: 8, gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, backgroundColor: C.cardAlt },
+  input: { flex: 1, padding: 4 },
+  inputInner: { backgroundColor: C.input, borderWidth: 1, borderColor: C.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, color: C.textBright, fontSize: 15, maxHeight: 120 },
+  sendBtn: { width: 52, height: 40, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: C.accent },
+  sendBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  cancelBtn: { width: 52, height: 40, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#dc2626" },
+  cancelBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  modalTitle: { color: C.textBright, fontSize: 18, fontWeight: "600" },
   modalClose: { color: C.accent, fontSize: 15 },
-  themeCard: { width: "48%", padding: 10, borderRadius: 10, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  themeCardActive: { borderColor: C.accent, borderWidth: 2 },
-  colorInput: { flex: 1, backgroundColor: C.input, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, color: C.text, fontSize: 12 },
-  sessionItem: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  sessionItemActive: { backgroundColor: C.accent + "20" },
+  sessionItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  sessionItemActive: { backgroundColor: C.card },
   sessionItemTitle: { color: C.text, fontSize: 14 },
   sessionItemTitleActive: { color: C.accent, fontWeight: "600" },
-  sessionItemDate: { color: C.placeholder, fontSize: 11, marginTop: 2 },
+  sessionItemDate: { color: C.placeholder, fontSize: 11, marginTop: 3 },
+  sectionLabel: { color: C.text2, fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  themeCard: { borderWidth: 1, borderColor: C.border, borderRadius: 10, padding: 10, width: "47%" },
+  themeCardActive: { borderColor: C.accent, borderWidth: 2 },
+  colorInput: { backgroundColor: C.input, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, color: C.textBright, fontSize: 13, flex: 1 },
 });
