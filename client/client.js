@@ -49,18 +49,16 @@ if (existsSync(pidFile)) {
 }
 writeFileSync(pidFile, String(process.pid));
 
-let currentChild = null;
-let processingDir = null;
-let processingSessionId = null;
+// ── Per-tab process tracking ──
+const childMap = new Map();   // tabId -> { child, dir, sessionId, rlOut, rlErr }
 let compactChild = null;
+let compactTabId = "";
 const allChildren = new Set();
 let currentTabId = "";
-let processingTabId = "";
 let ws = null;
 let reconnectTimer = null;
 let retryCount = 0;
 let disconnectGraceTimer = null;
-let protectedChild = null;
 let disconnectedSince = null;
 let feishuNotified = false;
 const sessionCache = new Map();
@@ -80,13 +78,9 @@ function getReconnectDelay() {
 
 function cancelAfterGrace() {
   if (disconnectGraceTimer) return;
-  protectedChild = currentChild;
   disconnectGraceTimer = setTimeout(() => {
     disconnectGraceTimer = null;
-    if (protectedChild && currentChild === protectedChild) {
-      cancelCurrent();
-    }
-    protectedChild = null;
+    cancelAll();
   }, 10000);
 }
 
@@ -94,7 +88,6 @@ function cancelGraceIfAlive() {
   if (disconnectGraceTimer) {
     clearTimeout(disconnectGraceTimer);
     disconnectGraceTimer = null;
-    protectedChild = null;
   }
 }
 
@@ -197,31 +190,6 @@ function runPython(script, args = []) {
   });
 }
 
-function pipeToPython(script, input) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const tmpFile = join(process.env.TEMP || "/tmp", "vibe-export-" + Date.now() + ".json");
-    try { writeFileSync(tmpFile, input, "utf8"); } catch (e) { reject(e); return; }
-    const pyBin = IS_LINUX ? "python3" : "python";
-    const child = spawn(pyBin, [script, tmpFile], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => { stdout += d; });
-    child.stderr.on("data", (d) => { stderr += d; });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      try { rmSync(tmpFile); } catch {}
-      if (code === 0) resolve(stdout.trim());
-      else {
-        console.error("[client] python stderr:", stderr);
-        reject(new Error(`exit ${code}`));
-      }
-    });
-    child.on("error", (err) => { if (!settled) { settled = true; try { rmSync(tmpFile); } catch {} reject(err); } });
-  });
-}
-
 function normalizeDir(d) {
   if (d.match(/^[A-Za-z]:/)) return "/mnt/" + d[0].toLowerCase() + d.slice(2).replace(/\\/g, "/");
   return d.replace(/\\/g, "/");
@@ -257,7 +225,7 @@ async function getLastSession(dir) {
   return sessions[0].id;
 }
 
-async function loadHistory(dir, sessionId) {
+async function loadHistory(dir, sessionId, forceTabId) {
   try {
     const script = join(__dirname, "last_fast.py");
     const pyBin = IS_LINUX ? "python3" : "python";
@@ -277,7 +245,7 @@ async function loadHistory(dir, sessionId) {
     if (!raw || raw.trim() === "[]") { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
     const rounds = JSON.parse(raw);
     if (rounds.length === 0) { console.warn("[client] loadHistory: 0 rounds, sid:", sessionId); return; }
-    send({ type: "history", rounds, sessionId });
+    send({ type: "history", rounds, sessionId }, forceTabId);
     console.log(`[client] Sent ${rounds.length} history rounds (fast path)`);
   } catch (e) {
     console.error("[client] loadHistory error:", e.message);
@@ -286,6 +254,7 @@ async function loadHistory(dir, sessionId) {
 
 async function sendHistory(msg) {
   const dir = msg.dir || process.cwd();
+  const ftId = currentTabId;
   console.log("[client] sendHistory dir:", dir);
   if (!dir) return;
   const isWin = dir.match(/^[A-Za-z]:/);
@@ -297,7 +266,7 @@ async function sendHistory(msg) {
   if (msg.sessionId) {
     sid = msg.sessionId;
   } else {
-    sid = tabSessions.get(currentTabId);
+    sid = tabSessions.get(ftId);
     if (!sid) {
       if (!sessionCache.has(cacheKey)) {
         const sid_ = await getLastSession(dir);
@@ -308,7 +277,7 @@ async function sendHistory(msg) {
     }
   }
   if (sid) {
-    await loadHistory(dir, sid);
+    await loadHistory(dir, sid, ftId);
   } else {
     console.warn("[client] sendHistory: no cached session for", cacheKey);
   }
@@ -316,6 +285,7 @@ async function sendHistory(msg) {
 
 async function handleListSessions(msg) {
   const dir = msg.dir || process.cwd();
+  const ftId = currentTabId;
   const sessions = await listSessions(dir);
   const isWin = dir.match(/^[A-Za-z]:/);
   const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
@@ -323,8 +293,8 @@ async function handleListSessions(msg) {
     const sid = await getLastSession(dir);
     if (sid) sessionCache.set(cacheKey, sid);
   }
-  const current = tabSessions.get(currentTabId) || sessionCache.get(cacheKey) || null;
-  send({ type: "sessions", sessions, current, dir });
+  const current = tabSessions.get(ftId) || sessionCache.get(cacheKey) || null;
+  send({ type: "sessions", sessions, current, dir }, ftId);
 }
 
 function handleSelectSession(msg) {
@@ -333,7 +303,6 @@ function handleSelectSession(msg) {
   } else {
     tabSessions.delete(currentTabId);
   }
-  // Also keep the old sessionCache for backward compat
   const dir = msg.dir || process.cwd();
   const isWin = dir.match(/^[A-Za-z]:/);
   const cacheKey = isWin ? "/mnt/" + dir[0].toLowerCase() + dir.slice(2).replace(/\\/g, "/") : dir;
@@ -361,10 +330,10 @@ function connect() {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-    // TCP keepalive: detect half-open connections caused by NAT timeouts
     try { ws._socket?.setKeepAlive(true, 15000); } catch {}
-    if (currentChild !== null) {
-      send({ type: "processing" });
+    // Notify all running tabs
+    for (const tabId of childMap.keys()) {
+      send({ type: "processing" }, tabId);
     }
   });
 
@@ -376,14 +345,17 @@ function connect() {
     if (msg.type === "msg") {
       handleMessage(msg);
     } else if (msg.type === "cancel") {
-      cancelCurrent();
+      cancelCurrent(currentTabId);
     } else if (msg.type === "load_history") {
       console.log("[client] load_history received, dir:", msg.dir);
       const hDir = msg.dir || "";
       const hIsWin = hDir.match(/^[A-Za-z]:/);
       const hKey = hIsWin ? "/mnt/" + hDir[0].toLowerCase() + hDir.slice(2).replace(/\\/g, "/") : hDir;
-      if (currentChild !== null && processingDir === hKey) {
-        send({ type: "processing" });
+      for (const [tabId, entry] of childMap) {
+        if (entry.dir === hKey) {
+          send({ type: "processing" }, tabId);
+          break;
+        }
       }
       sendHistory(msg);
     } else if (msg.type === "list_sessions") {
@@ -393,7 +365,8 @@ function connect() {
       console.log("[client] select_session, id:", msg.sessionId, "dir:", msg.dir);
       handleSelectSession(msg);
     } else if (msg.type === "status_query") {
-      send({ type: "processing_state", active: currentChild !== null, dir: msg.dir, sessionId: processingSessionId });
+      const entry = childMap.get(currentTabId);
+      send({ type: "processing_state", active: !!entry, dir: msg.dir, sessionId: entry ? entry.sessionId : null });
     }
   });
 
@@ -425,50 +398,107 @@ function loadAllowedDirs() {
   return config.allowedDirs || [];
 }
 
+function closeEntry(entry) {
+  try { entry.rlOut?.close(); } catch {}
+  try { entry.rlErr?.close(); } catch {}
+}
+
+function killProcess(child) {
+  try {
+    if (IS_LINUX) {
+      process.kill(-child.pid, "SIGTERM");
+      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch {} }, 5000);
+    } else {
+      spawn("taskkill", ["/PID", child.pid.toString(), "/T", "/F"]);
+    }
+  } catch {}
+}
+
+// ── JSON line handler — tabId passed as parameter ──
+function onJsonLine(line, tabId) {
+  const raw = stripAnsi(line);
+  try {
+    const msg = JSON.parse(raw);
+    const t = msg.type;
+    const p = msg.part || {};
+
+    if (t === "text") {
+      send({ type: "chunk", text: (p.text || "") + "\n" }, tabId);
+      if (p.text && /\[question\]/.test(p.text)) {
+        send({ type: "done", code: 0 }, tabId);
+      }
+    } else if (t === "reasoning") {
+      send({ type: "chunk", text: (p.text || "") + "\n" }, tabId);
+    } else if (t === "tool_use") {
+      const name = p.tool || "";
+      const state = p.state || {};
+      let cmd = state.title || "";
+      if (!cmd) {
+        const inp = state.input || {};
+        if (typeof inp === "string") cmd = inp;
+        else cmd = inp.command || inp.description || "";
+      }
+      send({ type: "chunk", text: `[${name}] ${cmd}\n` }, tabId);
+      if (name === "question") {
+        send({ type: "done", code: 0 }, tabId);
+      }
+    } else if (t === "error") {
+      const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
+      send({ type: "chunk", text: `[error] ${err}\n` }, tabId);
+    }
+  } catch {
+    // non-JSON line (WSL noise), drop silently
+  }
+}
+
 async function handleMessage(msg) {
   const dir = msg.dir;
   const message = msg.msg || "";
 
   if (!message.trim()) return;
 
+  const tabKey = currentTabId;
+
   if (message.trim() === "/stop") {
     let killed = 0;
+    const stoppedTabs = [...childMap.keys()];
     const toKill = [...allChildren];
     allChildren.clear();
+    childMap.clear();
     for (const child of toKill) {
       if (child.exitCode === null && !child.killed) {
-        try {
-          if (IS_LINUX) { process.kill(-child.pid, "SIGTERM"); }
-          else { spawn("taskkill", ["/PID", child.pid.toString(), "/T", "/F"]); }
-          killed++;
-        } catch {}
+        killProcess(child);
+        killed++;
       }
     }
-    currentChild = null;
-    processingDir = null;
-    processingSessionId = null;
     compactChild = null;
-    send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` });
-    send({ type: "done", code: 0 });
-    processingTabId = "";
+    compactTabId = "";
+    send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` }, tabKey);
+    send({ type: "done", code: 0 }, tabKey);
+    // Notify all other stopped tabs
+    for (const id of stoppedTabs) {
+      if (id !== tabKey) {
+        send({ type: "cancelled" }, id);
+      }
+    }
     return;
   }
 
   if (message.trim() === "!!restart") {
     console.log("[client] Restart requested");
-    send({ type: "chunk", text: "Restarting client...\n" });
-    cancelCurrent();
+    send({ type: "chunk", text: "Restarting client...\n" }, tabKey);
+    cancelAll();
     setTimeout(() => process.exit(0), 200);
     return;
   }
 
   if (message.trim() === "/compact") {
     if (IS_LINUX) {
-      send({ type: "error", text: "/compact is not supported on Linux. Run opencode and enter /compact manually." });
+      send({ type: "error", text: "/compact is not supported on Linux. Run opencode and enter /compact manually." }, tabKey);
       return;
     }
     if (!msg.dir || !msg.dir.trim()) {
-      send({ type: "error", text: "No working directory configured. Set Work Dir in settings first." });
+      send({ type: "error", text: "No working directory configured. Set Work Dir in settings first." }, tabKey);
       return;
     }
     const cDir = msg.dir;
@@ -479,20 +509,21 @@ async function handleMessage(msg) {
 
     const sid = sessionCache.get(cActualDir) || null;
     if (!sid) {
-      send({ type: "error", text: "No active session. Send a message first, then use /compact." });
+      send({ type: "error", text: "No active session. Send a message first, then use /compact." }, tabKey);
       return;
     }
 
     if (compactChild) {
-      send({ type: "error", text: "A compact is already in progress." });
+      send({ type: "error", text: "A compact is already in progress." }, tabKey);
       return;
     }
 
     console.log("[client] /compact dir:", cDir, "session:", sid, "mode:", cIsWin ? "win" : "wsl");
-    send({ type: "chunk", text: "[compact] Opening terminal...\n" });
+    send({ type: "chunk", text: "[compact] Opening terminal...\n" }, tabKey);
 
     const ocBin = cIsWin ? OPENDCODE_BIN : getOpenCode(cActualDir);
     const compactScript = join(__dirname, "compact.py");
+    compactTabId = tabKey;
 
     compactChild = spawn(COMPACT_PYTHON, [
       compactScript,
@@ -505,33 +536,42 @@ async function handleMessage(msg) {
 
     let cstdout = "";
     let cstderr = "";
+    let compactSettled = false;
     compactChild.stdout.on("data", (d) => { cstdout += d; });
     compactChild.stderr.on("data", (d) => { cstderr += d; });
 
     compactChild.on("close", (code) => {
+      if (compactSettled) return;
+      compactSettled = true;
       allChildren.delete(compactChild);
       compactChild = null;
+      const ctId = compactTabId;
+      compactTabId = "";
       try {
         const result = JSON.parse(cstdout.trim() || "{}");
         if (result.success) {
-          send({ type: "chunk", text: "[compact] " + result.message + "\n" });
-          send({ type: "done", code: 0 });
+          send({ type: "chunk", text: "[compact] " + result.message + "\n" }, ctId);
+          send({ type: "done", code: 0 }, ctId);
           console.log("[client] compact done");
         } else {
           const detail = cstderr.trim() || result.message || "failed";
-          send({ type: "error", text: "Compact: " + detail });
+          send({ type: "error", text: "Compact: " + detail }, ctId);
           console.error("[client] compact stderr:", cstderr.trim());
         }
       } catch {
-        send({ type: "error", text: "Compact: " + (cstderr.trim() || "script failed") });
+        send({ type: "error", text: "Compact: " + (cstderr.trim() || "script failed") }, ctId);
         console.error("[client] compact stderr:", cstderr.trim());
       }
     });
 
     compactChild.on("error", (err) => {
+      if (compactSettled) return;
+      compactSettled = true;
       allChildren.delete(compactChild);
       compactChild = null;
-      send({ type: "error", text: "Compact: " + err.message });
+      const ctId = compactTabId;
+      compactTabId = "";
+      send({ type: "error", text: "Compact: " + err.message }, ctId);
     });
 
     return;
@@ -547,24 +587,24 @@ async function handleMessage(msg) {
   const normalized = actualDir.replace(/\\/g, "/").replace(/\/$/, "") + "/";
   const winNormalized = isWin ? dir.replace(/\\/g, "/").replace(/\/$/, "") + "/" : "";
   if (!allowedPrefixes.some(p => normalized.startsWith(p) || (winNormalized && winNormalized.startsWith(p)))) {
-    send({ type: "error", text: "Directory not in allowed project paths" });
+    send({ type: "error", text: "Directory not in allowed project paths" }, tabKey);
     return;
   }
 
   if (isWin) {
     if (!existsSync(dir)) {
-      send({ type: "error", text: `Directory not found: ${dir}` });
+      send({ type: "error", text: `Directory not found: ${dir}` }, tabKey);
       return;
     }
   } else if (IS_LINUX) {
     if (!existsSync(dir)) {
-      send({ type: "error", text: `Directory not found: ${dir}` });
+      send({ type: "error", text: `Directory not found: ${dir}` }, tabKey);
       return;
     }
   } else {
     const exists = await dirExists(actualDir);
     if (!exists) {
-      send({ type: "error", text: `Directory not found: ${actualDir}` });
+      send({ type: "error", text: `Directory not found: ${actualDir}` }, tabKey);
       return;
     }
   }
@@ -599,8 +639,8 @@ async function handleMessage(msg) {
     const newTitle = rn[1].trim();
     const sid = lastSessionId;
     if (!sid) {
-      send({ type: "chunk", text: "[rename] No active session\n" });
-      send({ type: "done", code: 1 });
+      send({ type: "chunk", text: "[rename] No active session\n" }, tabKey);
+      send({ type: "done", code: 1 }, tabKey);
       return;
     }
     const escaped = newTitle.replace(/'/g, "'\\''");
@@ -615,11 +655,11 @@ async function handleMessage(msg) {
         if (r.error) throw r.error;
         if (r.status !== 0) throw new Error(r.stderr?.trim() || `exit code ${r.status}`);
       }
-      send({ type: "chunk", text: `[rename] Session title changed to: ${newTitle}\n` });
+      send({ type: "chunk", text: `[rename] Session title changed to: ${newTitle}\n` }, tabKey);
     } catch (e) {
-      send({ type: "chunk", text: `[rename] Failed: ${e.message}\n` });
+      send({ type: "chunk", text: `[rename] Failed: ${e.message}\n` }, tabKey);
     }
-    send({ type: "done", code: 0 });
+    send({ type: "done", code: 0 }, tabKey);
     return;
   }
 
@@ -634,26 +674,13 @@ async function handleMessage(msg) {
   const useJson = OPENDCODE_MODE === "json";
   const fmtFlag = useJson ? ["--format", "json"] : [];
 
-  // Kill any previous running task before starting a new one
-  if (currentChild) {
-    const cancelledTabId = processingTabId;
-    try {
-      if (IS_LINUX) {
-        process.kill(-currentChild.pid, "SIGTERM");
-        setTimeout(() => { try { process.kill(-currentChild.pid, "SIGKILL"); } catch {} }, 5000);
-      } else {
-        spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
-      }
-    } catch (e) {
-      console.error("[client] kill previous child failed:", e.message);
-    }
-    currentChild = null;
-    processingDir = null;
-    processingSessionId = null;
-    processingTabId = "";
-    if (cancelledTabId) {
-      send({ type: "cancelled" }, cancelledTabId);
-    }
+  // Kill previous task for THIS tab only — other tabs keep running
+  const prev = childMap.get(tabKey);
+  if (prev) {
+    killProcess(prev.child);
+    closeEntry(prev);
+    childMap.delete(tabKey);
+    send({ type: "cancelled" }, tabKey);
   }
 
   let child;
@@ -685,21 +712,20 @@ async function handleMessage(msg) {
     console.log(`[client] Running ${getOpenCode(actualDir)} via PTY in ${actualDir}: ${message}`);
   }
 
-  currentChild = child;
   allChildren.add(child);
-  processingTabId = currentTabId;
-  processingDir = actualDir;
-  processingSessionId = lastSessionId;
   const rlOut = readline.createInterface({ input: child.stdout });
   const rlErr = readline.createInterface({ input: child.stderr });
+  childMap.set(tabKey, { child, dir: actualDir, sessionId: lastSessionId, rlOut, rlErr });
 
   if (useJson) {
-    rlOut.on("line", onJsonLine);
-    rlErr.on("line", onJsonLine);
+    const jTabId = tabKey;
+    rlOut.on("line", (line) => onJsonLine(line, jTabId));
+    rlErr.on("line", (line) => onJsonLine(line, jTabId));
   } else {
     let burstCount = 0;
     let burstStart = 0;
     const MAX_BURST = 40;
+    const tTabId = tabKey;
     const onTextLine = (line) => {
       const text = stripAnsi(line);
       const now = Date.now();
@@ -707,13 +733,13 @@ async function handleMessage(msg) {
       burstCount++;
       if (burstCount > MAX_BURST) return;
       if (burstCount === MAX_BURST) {
-        send({ type: "chunk", text: text + "\n" });
-        send({ type: "chunk", text: "[Output truncated...]\n" });
+        send({ type: "chunk", text: text + "\n" }, tTabId);
+        send({ type: "chunk", text: "[Output truncated...]\n" }, tTabId);
         return;
       }
-      send({ type: "chunk", text: text + "\n" });
+      send({ type: "chunk", text: text + "\n" }, tTabId);
       if (/^\[question\]/.test(text)) {
-        send({ type: "done", code: 0 });
+        send({ type: "done", code: 0 }, tTabId);
       }
     };
     rlOut.on("line", onTextLine);
@@ -721,22 +747,19 @@ async function handleMessage(msg) {
   }
 
   child.on("close", async (code) => {
-    if (currentChild !== child) return;
-    const completedTabId = processingTabId;
+    const entry = childMap.get(tabKey);
+    if (!entry || entry.child !== child) return;
+    childMap.delete(tabKey);
     allChildren.delete(child);
-    currentChild = null;
-    processingDir = null;
-    processingSessionId = null;
-    rlOut.close();
-    rlErr.close();
-    send({ type: "done", code: code || 0 }, completedTabId);
+    closeEntry(entry);
+    send({ type: "done", code: code || 0 }, tabKey);
     if (code === 0) {
       try {
         const sid = lastSessionId || await getLastSession(dir);
         if (sid) {
           sessionCache.set(actualDir, sid);
           const sessions = await listSessions(dir);
-          send({ type: "sessions", sessions, current: sid, dir }, completedTabId);
+          send({ type: "sessions", sessions, current: sid, dir }, tabKey);
           let out;
           const dbPaths = config.statsDbPaths || [];
           if (isWin) {
@@ -754,97 +777,50 @@ async function handleMessage(msg) {
               let line = `c=${s.ctx.toLocaleString()} o=${s.out.toLocaleString()}`;
               if (s.reasoning) line += ` r=${s.reasoning.toLocaleString()}`;
               if (s.model) line += `\n${s.model}${s.variant ? " " + s.variant : ""}`;
-              send({ type: "chunk", text: line }, completedTabId);
+              send({ type: "chunk", text: line }, tabKey);
             }
           }
         }
       } catch {}
     }
-    processingTabId = "";
   });
 
   child.on("error", (err) => {
-    if (currentChild !== child) return;
+    const entry = childMap.get(tabKey);
+    if (!entry || entry.child !== child) return;
+    childMap.delete(tabKey);
     allChildren.delete(child);
-    currentChild = null;
-    processingDir = null;
-    processingSessionId = null;
-    send({ type: "error", text: `Failed to start opencode: ${err.message}` });
-    processingTabId = "";
+    closeEntry(entry);
+    send({ type: "error", text: `Failed to start opencode: ${err.message}` }, tabKey);
   });
 }
 
-function onJsonLine(line) {
-  const raw = stripAnsi(line);
-  try {
-    const msg = JSON.parse(raw);
-    const t = msg.type;
-    const p = msg.part || {};
-
-    if (t === "text") {
-      send({ type: "chunk", text: (p.text || "") + "\n" });
-      if (p.text && /\[question\]/.test(p.text)) {
-        send({ type: "done", code: 0 });
-      }
-    } else if (t === "reasoning") {
-      send({ type: "chunk", text: (p.text || "") + "\n" });
-    } else if (t === "tool_use") {
-      const name = p.tool || "";
-      const state = p.state || {};
-      let cmd = state.title || "";
-      if (!cmd) {
-        const inp = state.input || {};
-        if (typeof inp === "string") cmd = inp;
-        else cmd = inp.command || inp.description || "";
-      }
-      send({ type: "chunk", text: `[${name}] ${cmd}\n` });
-      if (name === "question") {
-        send({ type: "done", code: 0 });
-      }
-    } else if (t === "error") {
-      const err = msg.message || (msg.error && msg.error.message) || msg.error || "";
-      send({ type: "chunk", text: `[error] ${err}\n` });
+// ── Cancel: tabId specified → cancel that tab only; no tabId → cancel ALL ──
+function cancelCurrent(tabId) {
+  if (tabId) {
+    const entry = childMap.get(tabId);
+    if (entry) {
+      killProcess(entry.child);
+      closeEntry(entry);
+      childMap.delete(tabId);
+      send({ type: "cancelled" }, tabId);
     }
-  } catch {
-    // non-JSON line (WSL noise), drop silently
+  } else {
+    cancelAll();
   }
 }
 
-function cancelCurrent() {
-  if (currentChild) {
-    try {
-      if (IS_LINUX) {
-        process.kill(-currentChild.pid, "SIGTERM");
-        setTimeout(() => {
-          try { process.kill(-currentChild.pid, "SIGKILL"); } catch {}
-        }, 5000);
-      } else {
-        spawn("taskkill", ["/PID", currentChild.pid.toString(), "/T", "/F"]);
-      }
-    } catch (e) {
-      console.error("[client] kill currentChild failed:", e.message);
-    }
-    currentChild = null;
-    processingDir = null;
-    processingSessionId = null;
-    send({ type: "cancelled" });
-    processingTabId = "";
+function cancelAll() {
+  for (const [tabId, entry] of childMap) {
+    killProcess(entry.child);
+    closeEntry(entry);
+    childMap.delete(tabId);
+    send({ type: "cancelled" }, tabId);
   }
   if (compactChild) {
-    try {
-      if (IS_LINUX) {
-        process.kill(-compactChild.pid, "SIGTERM");
-        setTimeout(() => {
-          try { process.kill(-compactChild.pid, "SIGKILL"); } catch {}
-        }, 5000);
-      } else {
-        spawn("taskkill", ["/PID", compactChild.pid.toString(), "/T", "/F"]);
-      }
-    } catch (e) {
-      console.error("[client] kill compactChild failed:", e.message);
-    }
+    killProcess(compactChild);
     compactChild = null;
-    send({ type: "cancelled" });
+    compactTabId = "";
   }
 }
 
@@ -854,9 +830,7 @@ function send(obj, forceTabId) {
       ws.send(JSON.stringify({ ...obj, tabId: forceTabId }));
       return;
     }
-    const isTaskMsg = obj.type === "chunk" || obj.type === "done" || obj.type === "cancelled" || obj.type === "error" || obj.type === "processing";
-    const tabId = isTaskMsg && processingTabId ? processingTabId : currentTabId;
-    ws.send(JSON.stringify(tabId ? { ...obj, tabId } : obj));
+    ws.send(JSON.stringify(obj.tabId ? obj : { ...obj, tabId: currentTabId }));
   }
 }
 
@@ -867,7 +841,7 @@ const stdinRl = readline.createInterface({ input: process.stdin });
 stdinRl.on("SIGINT", shutdown);
 
 function shutdown() {
-  cancelCurrent();
+  cancelAll();
   if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (ws) ws.close();
@@ -876,7 +850,7 @@ function shutdown() {
 
 process.on("uncaughtException", (err) => {
   console.error("[client] Uncaught:", err.message);
-  cancelCurrent();
+  cancelAll();
   if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (ws) ws.close();
