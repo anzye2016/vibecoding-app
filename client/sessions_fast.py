@@ -35,9 +35,9 @@ c = conn.cursor()
 nd = dir_path.replace("\\", "/").rstrip("/") + "/"
 
 c.execute("""
-    SELECT id, data, directory, updated, title
+    SELECT id, metadata, directory, time_updated, title
     FROM session
-    ORDER BY updated DESC
+    ORDER BY time_updated DESC
     LIMIT 100
 """)
 rows = c.fetchall()
@@ -49,16 +49,16 @@ for r in rows:
     if sd != nd:
         continue
     t = r["title"]
-    if not t and r["data"]:
+    if not t and r["metadata"]:
         try:
-            d = json.loads(r["data"]) if isinstance(r["data"], str) else {}
+            d = json.loads(r["metadata"]) if isinstance(r["metadata"], str) else {}
             t = d.get("title", "")
         except:
             pass
     sessions.append({
         "id": r["id"],
         "title": t or "",
-        "updated": r["updated"] or 0,
+        "updated": r["time_updated"] or 0,
     })
 
 print(json.dumps(sessions))
