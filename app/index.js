@@ -147,8 +147,13 @@ function mergeMsg(prev, msg) {
     );
   }
   if (msg.type === "status" && msg.text === "--- Disconnected ---" && last?.type === "status" && last.text === "--- Disconnected ---") return prev;
-  if (msg.type === "chunk" && last?.type === "chunk") {
+  if (msg.type === "chunk" && last?.type === "chunk" && !/^c=[\d,]+/.test(msg.text.trim())) {
     return [...prev.slice(0, -1), { ...last, text: last.text + msg.text }];
+  }
+  if (msg.type === "chunk" && /^c=[\d,]+/.test(msg.text.trim())) {
+    const userIdx = prev.map(m => m.type).lastIndexOf("user");
+    if (userIdx >= 0) return [...prev.slice(0, userIdx), msg, ...prev.slice(userIdx)];
+    return [...prev, msg];
   }
   return [...prev, msg];
 }

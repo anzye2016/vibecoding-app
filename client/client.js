@@ -137,27 +137,6 @@ function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-function runOpenCode(dir, args, opts = {}) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const child = spawn(OPENDCODE_BIN, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], ...opts });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => { stdout += d; });
-    child.stderr.on("data", (d) => { stderr += d; });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      if (code === 0) resolve(stdout.trim());
-      else {
-        console.error("[client] opencode stderr:", stderr);
-        reject(new Error(`exit ${code}`));
-      }
-    });
-    child.on("error", (err) => { if (!settled) { settled = true; reject(err); } });
-  });
-}
-
 async function dirExists(wslDir) {
   if (wslDir.match(/^[A-Za-z]:/)) return existsSync(wslDir);
   try {
@@ -198,21 +177,21 @@ function normalizeDir(d) {
 async function listSessions(dir) {
   if (!dir) return [];
   try {
+    const script = join(__dirname, "sessions_fast.py");
+    const pyBin = IS_LINUX ? "python3" : "python";
     let raw;
     if (dir.match(/^[A-Za-z]:/)) {
-      raw = await runOpenCode(dir, ["session", "list", "--format", "json"]);
+      const r = spawnSync(pyBin, [script, dir], { encoding: "utf-8", windowsHide: true, timeout: 5000 });
+      raw = r.stdout;
     } else if (IS_LINUX) {
-      raw = await runOpenCode(dir, ["session", "list", "--format", "json"]);
+      const r = spawnSync(pyBin, [script, dir], { encoding: "utf-8", timeout: 5000 });
+      raw = r.stdout;
     } else {
-      raw = await wsl(`cd "${dir}" && ${getOpenCode(dir)} session list --format json`);
+      const fScript = "/mnt/" + script[0].toLowerCase() + script.slice(2).replace(/\\/g, "/");
+      raw = await wsl(`python3 '${fScript}' '${dir}'`);
     }
     if (!raw) return [];
-    const sessions = JSON.parse(raw);
-    if (!Array.isArray(sessions)) return [];
-    const nd = normalizeDir(dir);
-    return sessions
-      .filter(s => normalizeDir(s.directory || "") === nd)
-      .map(s => ({ id: s.id, title: s.title, updated: s.updated }));
+    return JSON.parse(raw);
   } catch {
     return [];
   }
@@ -769,9 +748,11 @@ async function handleMessage(msg) {
           let out;
           const dbPaths = config.statsDbPaths || [];
           if (isWin) {
-            out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
+            const r = spawnSync("python", [join(__dirname, "stats.py"), sid, ...dbPaths], { encoding: "utf-8", windowsHide: true, timeout: 5000 });
+            out = r.stdout;
           } else if (IS_LINUX) {
-            out = await runPython(join(__dirname, "stats.py"), [sid, ...dbPaths]);
+            const r = spawnSync("python3", [join(__dirname, "stats.py"), sid, ...dbPaths], { encoding: "utf-8", timeout: 5000 });
+            out = r.stdout;
           } else {
             const dbArgs = dbPaths.map(p => `"${p}"`).join(" ");
             const statsScript = "/mnt/" + __dirname[0].toLowerCase() + __dirname.slice(2).replace(/\\/g, "/") + "/stats.py";
