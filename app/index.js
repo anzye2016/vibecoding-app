@@ -454,8 +454,8 @@ export default function ChatScreen() {
             doneTimerRef.current.delete(tabId);
             if (showStats) routeMsg(tabId, { type: "status", text: msg.text.trim() });
             routeMsg(tabId, { type: "status", text: "--- Done ---" });
-          } else if (/^c=[\d,]+/.test(msg.text.trim())) {
-            if (showStats) routeMsg(tabId, { type: "status", text: msg.text.trim() });
+          } else if (!showStats && /^c=[\d,]+/.test(msg.text.trim())) {
+            // skip cost lines when stats hidden
           } else {
             routeMsg(tabId, msg);
           }
