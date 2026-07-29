@@ -454,7 +454,7 @@ async function handleMessage(msg) {
     compactChild = null;
     compactTabId = "";
     send({ type: "chunk", text: `[stop] Killed ${killed} process(es)\n` }, tabKey);
-    send({ type: "done", code: 0 }, tabKey);
+    send({ type: "done", code: 0, suppressLabel: true }, tabKey);
     // Notify all other stopped tabs
     for (const id of stoppedTabs) {
       if (id !== tabKey) {
@@ -535,7 +535,7 @@ async function handleMessage(msg) {
         const result = JSON.parse(cstdout.trim() || "{}");
         if (result.success) {
           send({ type: "chunk", text: "[compact] " + result.message + "\n" }, ctId);
-          send({ type: "done", code: 0 }, ctId);
+          send({ type: "done", code: 0, suppressLabel: true }, ctId);
           console.log("[client] compact done");
         } else {
           const detail = cstderr.trim() || result.message || "failed";
@@ -624,7 +624,7 @@ async function handleMessage(msg) {
     const sid = lastSessionId;
     if (!sid) {
       send({ type: "chunk", text: "[rename] No active session\n" }, tabKey);
-      send({ type: "done", code: 1 }, tabKey);
+      send({ type: "done", code: 1, suppressLabel: true }, tabKey);
       return;
     }
     const escaped = newTitle.replace(/'/g, "'\\''");
@@ -643,7 +643,7 @@ async function handleMessage(msg) {
     } catch (e) {
       send({ type: "chunk", text: `[rename] Failed: ${e.message}\n` }, tabKey);
     }
-    send({ type: "done", code: 0 }, tabKey);
+    send({ type: "done", code: 0, suppressLabel: true }, tabKey);
     return;
   }
 
