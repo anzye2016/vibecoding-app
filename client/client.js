@@ -468,7 +468,6 @@ async function handleMessage(msg) {
 
   if (message.trim() === "!!restart") {
     console.log("[client] Restart requested");
-    send({ type: "done", code: 0 }, tabKey);
     cancelAll();
     setTimeout(() => {
       if (ws) { ws.removeAllListeners(); try { ws._socket?.destroy(); } catch {} }
