@@ -37,6 +37,7 @@ nd = dir_path.replace("\\", "/").rstrip("/") + "/"
 c.execute("""
     SELECT id, metadata, directory, time_updated, title
     FROM session
+    WHERE agent = 'build'
     ORDER BY time_updated DESC
     LIMIT 100
 """)
