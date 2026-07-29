@@ -758,6 +758,7 @@ async function handleMessage(msg) {
     childMap.delete(tabKey);
     allChildren.delete(child);
     closeEntry(entry);
+    send({ type: "done", code: code || 0 }, tabKey);
     if (code === 0) {
       try {
         const sid = lastSessionId || await getLastSession(dir);
@@ -788,7 +789,6 @@ async function handleMessage(msg) {
         }
       } catch {}
     }
-    send({ type: "done", code: code || 0 }, tabKey);
   });
 
   child.on("error", (err) => {
