@@ -468,7 +468,7 @@ export default function ChatScreen() {
           routeProc(tabId, false);
           const prev = doneTimerRef.current.get(tabId);
           if (prev) clearTimeout(prev);
-          if (!msg.suppressLabel) doneTimerRef.current.set(tabId, setTimeout(() => routeMsg(tabId, { type: "status", text: "--- Done ---" }), 5000));
+          if (!msg.suppressLabel) doneTimerRef.current.set(tabId, setTimeout(() => routeMsg(tabId, { type: "status", text: "--- Done ---" }), 2000));
         } else if (msg.type === "cancelled") {
           routeProc(tabId, false);
           const prev = doneTimerRef.current.get(tabId);
