@@ -11,7 +11,7 @@ const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf
 const PORT = parseInt(process.env.PORT || config.relayPort || "8766", 10);
 const HOST = process.env.HOST || config.relayHost || "127.0.0.1";
 const ORIGIN = process.env.ORIGIN || config.relayOrigin || "https://localhost";
-const MAX_MSG_SIZE = 65536;
+const MAX_MSG_SIZE = 1048576;
 const LOG_FILE = "/var/log/relay/relay.log";
 
 function log(level, event, data = {}) {
