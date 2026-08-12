@@ -182,7 +182,7 @@ def main():
     parser.add_argument("--opencode", default="opencode")
     parser.add_argument("--startup-wait", type=int, default=20)
     parser.add_argument("--compact-wait", type=int, default=90)
-    parser.add_argument("--wt", default=os.environ.get("WT_EXE", r"C:\Users\%USERNAME%\AppData\Local\Microsoft\WindowsApps\wt.exe"))
+    parser.add_argument("--wt", default=os.environ.get("WT_EXE") or os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe"))
     args = parser.parse_args()
 
     stdout_fd = os.dup(1)
