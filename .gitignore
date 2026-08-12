@@ -30,3 +30,8 @@ config.json
 scripts/vibecoding-client-wrapper.ps1
 scripts/vibecoding-daemon.vbs
 快速命令.txt
+
+# 开发辅助，不公开
+design-prototypes/
+tests/
+gen-icon.js
