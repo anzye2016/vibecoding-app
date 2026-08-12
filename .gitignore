@@ -3,6 +3,7 @@
 build/
 dist/
 android-new/
+android/
 *.apk
 *.aab
 android/.gradle/
@@ -23,3 +24,9 @@ Thumbs.db
 client/.vibecoding-token
 temp/
 compact-test-*.txt
+
+# 内部/含个人信息，不公开
+config.json
+scripts/vibecoding-client-wrapper.ps1
+scripts/vibecoding-daemon.vbs
+快速命令.txt
